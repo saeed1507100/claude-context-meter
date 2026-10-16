@@ -58,6 +58,17 @@ const saveAndCompact = async ($: EngineInterface) => {
 
 const compact = ($: EngineInterface) => $.session.compact({ instructions: COMPACT_INSTRUCTIONS })
 
+/** Compaction is refused while a turn runs, and turn.complete still runs inside the turn, so retry until idle. */
+const compactWhenIdle = async ($: EngineInterface, tries = 10) => {
+  try {
+    const r = await compact($)
+    if ('skip' in r && r.skip !== undefined) $.ui.toast(`Compact skipped: ${r.skip}`)
+  } catch (err) {
+    if (tries > 1) $.clock.after(1000, () => void compactWhenIdle($, tries - 1))
+    else $.ui.toast(`Couldn't compact: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
 const measure = async ($: EngineInterface) => {
   const usage = await $.session.usage({ breakdown: 'summary' })
   const f = toFill(usage.context)
@@ -106,9 +117,9 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
-    if (await read($, isCompactPending)) {
+    if (e.agentId === undefined && (await read($, isCompactPending))) {
       await update($, isCompactPending, () => false)
-      void compact($)
+      $.clock.after(500, () => void compactWhenIdle($))
     }
     return result
   })
@@ -222,7 +233,7 @@ export const register: Register = on => {
         <Box flexDirection="row" gap={1}>
           <Button key="save-compact" label="Save & compact" variant="primary" hotkey="s" onPress={() => saveAndCompact($)} />
           <Button key="save" label="Save" hotkey="v" onPress={() => saveState($)} />
-          <Button key="compact" label="Compact" hotkey="c" onPress={() => compact($)} />
+          <Button key="compact" label="Compact" hotkey="c" onPress={() => compactWhenIdle($)} />
           <Button key="refresh" label="Refresh" hotkey="r" plain onPress={() => measure($)} />
         </Box>
       </Box>
