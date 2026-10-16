@@ -42,15 +42,15 @@ const compact = ($: EngineInterface) => $.session.compact({ instructions: COMPAC
 const measure = async ($: EngineInterface) => {
   const usage = await $.session.usage({ breakdown: 'summary' })
   const f = toFill(usage.context)
-  const h = fiveHourOf(usage.rateLimits)
+  const hourly = fiveHourOf(usage.rateLimits)
   await update($, fill, () => f)
-  await update($, fiveHour, () => h)
+  await update($, fiveHour, () => hourly)
   if (usage.context.breakdown) {
     const b = toBreakdown(usage.context.breakdown)
     await update($, breakdown, () => b)
   }
 
-  const level = levelOf(f, h)
+  const level = levelOf(f, hourly)
   const warned = await read($, warnedLevel)
   if (RANK[level] > RANK[warned] && f !== null) {
     $.ui.toast(`Context at ${fmt(f.tokens)} (${f.percent}%). Consider saving state and compacting.`)
@@ -75,8 +75,12 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'context-meter' }, async $ => {
-    await openPane($)
-    return { text: 'Context pane opened.' }
+    const opened = await openPane($)
+    const usage = await $.session.usage()
+    const f = await read($, fill)
+    return {
+      text: `Context pane ${opened.isPlaced ? 'opened' : 'not placed by this surface'}. usage.context=${JSON.stringify(usage.context)} stored=${JSON.stringify(f)}`,
+    }
   })
 
   on('turn.complete', async ($, e, next) => {
@@ -90,12 +94,16 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const f = await read($, fill)
-    if (e.props.hasSurvey || f === null) return next(e)
+    if (e.props.hasSurvey) return next(e)
+    if (f === null) {
+      const { Text } = $.ui.resolve(e)
+      return <Text dimColor>Context: waiting for the first reply ({e.surface})</Text>
+    }
 
     const b = await read($, breakdown)
-    const h = await read($, fiveHour)
-    const level = levelOf(f, h)
-    const advice = (await read($, isDismissed)) ? null : adviceOf(level, f, h)
+    const hourly = await read($, fiveHour)
+    const level = levelOf(f, hourly)
+    const advice = (await read($, isDismissed)) ? null : adviceOf(level, f, hourly)
     const color = level === 'high' ? 'red' : level === 'elevated' ? 'yellow' : undefined
     const label = `Context ${fmt(f.tokens)} / ${fmt(f.window)} (${f.percent}%)`
     const ui = $.ui.resolve(e)
@@ -137,11 +145,11 @@ export const register: Register = on => {
     const { Box, Text, Button } = ui
     const f = await read($, fill)
     const b = await read($, breakdown)
-    const h = await read($, fiveHour)
+    const hourly = await read($, fiveHour)
     if (f === null || b === null) return <Text dimColor>No measurement yet: send a message first.</Text>
 
-    const level = levelOf(f, h)
-    const advice = adviceOf(level, f, h)
+    const level = levelOf(f, hourly)
+    const advice = adviceOf(level, f, hourly)
     const used = b.slices.filter(s => s.kind === 'used')
     const Svg = 'Svg' in ui ? ui.Svg : undefined
 
@@ -149,7 +157,7 @@ export const register: Register = on => {
       <Box flexDirection="column" gap={1}>
         <Text bold>
           {fmt(f.tokens)} of {fmt(f.window)} tokens ({f.percent}%)
-          {h === null ? '' : ` · 5-hour limit ${Math.round(h)}%`}
+          {hourly === null ? '' : ` · 5-hour limit ${Math.round(hourly)}%`}
         </Text>
         {Svg !== undefined ? (
           <Box flexDirection="column" gap={1}>
