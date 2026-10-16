@@ -48,6 +48,13 @@ Checkpoint of the session that built this plugin (2026-10-16).
 - `atom()` refs need literal `plugin` and `key` values; a const variable fails `claude plugin validate`.
 - Narrow the `Svg` element with `'Svg' in ui`; the terminal's element table has none.
 
+## 1.0.0 (2026-10-16)
+
+- `hooks/budget.ts`: limits parsing (5h + 7d with resets), pace, weekly day baseline (in `$.store` key `weeklyBaseline`), `tipsOf`, `userConfig` budget.
+- Turn cost = live 5h reading at `turn.complete` minus live reading at `turn.start`; both must be live.
+- Not yet confirmed live in the app: the turn-cost line and the pace tip. Watch for whether the endpoint's utilization moves per turn at useful resolution.
+- Open review items not done: backoff on 429/5xx, staleness marker for live figures, weekly baseline keyed to `weeklyResetsAt`, try/catch on pane button handlers.
+
 ## Next steps (none started)
 
 - Add a UI test that mounts `AbovePrompt` and `Pane` on the `terminal` and `desktop` surfaces. It would catch drawing crashes like the `h` bug.

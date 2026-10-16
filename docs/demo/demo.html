@@ -1,0 +1,123 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>context-meter demo</title>
+<style>
+:root{--bg:#faf9f5;--ink:#1f1e1d;--dim:#8a8883;--line:#dedcd5;--box:#fff;--btn:#f0eee6;--pri:#1f1e1d;--pric:#faf9f5;--amber:#c98500;--red:#d0473b}
+[data-theme=dark]{--bg:#262624;--ink:#f5f4ef;--dim:#9a9890;--line:#3d3c38;--box:#30302e;--btn:#3a3935;--pri:#f5f4ef;--pric:#262624}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+#shot{width:900px;height:200px;padding:22px 30px;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.band{padding:0 6px 8px}
+.row{display:flex;align-items:center;gap:8px;height:30px;white-space:nowrap}
+.dim{color:var(--dim)}
+.sp{flex:1}
+.btn{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:7px;padding:3px 10px;font:inherit;font-size:12.5px}
+.btn.pri{background:var(--pri);color:var(--pric);border-color:var(--pri)}
+.btn.press{transform:scale(.94);filter:brightness(1.25)}
+.bar svg{display:block}
+.warn{color:var(--amber)}.err{color:var(--red)}
+#row2{overflow:hidden;transition:none}
+.box{background:var(--box);border:1px solid var(--line);border-radius:18px;padding:14px 16px;height:72px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+.ph{color:var(--dim);font-size:14px}
+.tools{display:flex;justify-content:space-between;color:var(--dim);font-size:12px}
+.send{width:26px;height:26px;border-radius:8px;background:#c96442;color:#fff;text-align:center;line-height:26px;margin-top:-6px}
+#cur{position:absolute;width:18px;height:18px;z-index:5;pointer-events:none;left:0;top:0}
+/* pane */
+#pane{width:440px;padding:20px;background:var(--box);border:1px solid var(--line);border-radius:14px;display:none}
+.big{font-size:30px;font-weight:600;letter-spacing:-.02em}
+.big small{font-size:14px;font-weight:400;color:var(--dim);margin-left:6px}
+h4{margin:16px 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.li{display:flex;align-items:center;gap:8px;padding:2px 0}
+.li i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.li b{font-weight:400;margin-left:auto;color:var(--dim)}
+.li span.k{flex:1}
+.tip{padding:2px 0;color:var(--dim)}
+.btns{display:flex;gap:8px;margin-top:16px}
+</style></head>
+<body>
+<div id="shot">
+  <div id="cur"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M2 1l12 7.5-5.2 1.3L11 15.5 8.7 16.4 6.5 11 2.8 14z" fill="#111" stroke="#fff" stroke-width="1.2"/></svg></div>
+  <div class="band">
+    <div class="row" id="row1">
+      <span class="dim">Context</span><span class="bar" id="bar"></span>
+      <span id="tok">180.5k / 1.0M</span><span class="dim" id="pc">18%</span>
+      <span class="dim" id="five">· 5h 42%</span><span class="dim">· last turn +1.2%</span>
+      <span class="sp"></span><button class="btn">Details</button>
+    </div>
+    <div class="row" id="row2" style="display:none">
+      <span id="tri">▲</span><span class="dim" id="tipt"></span>
+      <span class="sp"></span><button class="btn pri" id="sc">Save &amp; compact</button><button class="btn">Later</button>
+    </div>
+  </div>
+  <div class="box"><div class="ph">Reply to Claude…</div><div class="tools"><span>+ &nbsp; Opus</span><span class="send">↑</span></div></div>
+</div>
+
+<div id="pane">
+  <div class="big" id="pbig">180.5k<small>of 1.0M tokens · 18%</small></div>
+  <div id="pbar" style="margin-top:10px"></div>
+  <div id="groups" style="margin-top:12px"></div>
+  <h4>Usage limits</h4>
+  <div class="li"><span class="k">5-hour window</span><span>42%</span><b>aim: last 4h</b></div>
+  <div class="li"><span class="k">Last turn</span><span>+1.2%</span></div>
+  <div class="li"><span class="k">Weekly</span><span>31%</span></div>
+  <div class="li"><span class="k">Weekly, today</span><span>8%</span><b>budget 20% a day</b></div>
+  <h4>MCP servers</h4>
+  <div class="li"><span class="k">github</span><b>6.2k</b></div>
+  <div class="li"><span class="k">notion</span><b>4.1k</b></div>
+  <div class="li"><span class="k">neon</span><b>2.4k</b></div>
+  <h4>Tips</h4>
+  <div class="tip">Each turn re-reads 150.0k: save and compact, or /clear for a new task</div>
+  <div class="tip">At this pace the 5h limit runs out at 14:20, before 4h of work</div>
+  <div class="btns"><button class="btn pri">Save &amp; compact</button><button class="btn">Save</button><button class="btn">Compact</button><button class="btn">Refresh</button></div>
+</div>
+<script src="bars.js"></script>
+<script>
+const q=new URLSearchParams(location.search);
+document.documentElement.dataset.theme=q.get('theme')==='dark'?'dark':'light';
+const $=id=>document.getElementById(id);
+const lerp=(t,pts)=>{ // pts [[t,v],...]
+  if(t<=pts[0][0])return pts[0][1];
+  for(let i=1;i<pts.length;i++){const[a,av]=pts[i-1],[b,bv]=pts[i];
+    if(t<=b){const u=(t-a)/(b-a),e=u*u*(3-2*u);return av+(bv-av)*e}}
+  return pts[pts.length-1][1]};
+const TOK=[[0,40],[2,90],[4,150],[5.2,180.5],[7.5,180.5],[8.3,25],[10,25]];
+const FIVE=[[0,20],[4,42],[10,42]];
+const barFor=k=>k===180.5?BARS.final:BARS[Math.min(200,Math.max(20,Math.round(k/5)*5))];
+const fmt=n=>n>=1000?(n/1000).toFixed(1)+'M':n.toFixed(1)+'k';
+function setT(t){
+  const k=lerp(t,TOK), five=Math.round(lerp(t,FIVE));
+  const kk=(t>=5.2&&t<=7.5)?180.5:k;
+  $('bar').innerHTML=barFor(Math.round(kk*10)/10===180.5?180.5:kk).s;
+  $('tok').textContent=(kk>=1000?'':kk.toFixed(1)+'k')+' / 1.0M';
+  $('pc').textContent=Math.round(kk/10)+'%';
+  $('five').textContent='· 5h '+five+'%';
+  const red=t>=5.2&&t<7.6, amber=kk>=100&&!red&&t<7.6;
+  const r2=$('row2'); r2.style.display=(red||amber)?'flex':'none';
+  const tri=$('tri'); tri.className=red?'err':'warn';
+  $('tipt').textContent=red?'At this pace the 5h limit runs out at 14:20, before 4h of work'
+    :'Each turn re-reads '+(Math.round(kk*10)/10).toFixed(1)+'k: save and compact, or /clear for a new task';
+  // cursor: appears 6.0, moves to button by 7.2, clicks 7.3
+  const cur=$('cur'), sc=$('sc');
+  if(t>=6.0&&t<8.6){
+    const b=sc.getBoundingClientRect(), s=$('shot').getBoundingClientRect();
+    const tx=b.left-s.left+b.width/2, ty=b.top-s.top+b.height/2+4;
+    const u=Math.min(1,Math.max(0,(t-6.0)/1.2)), e=u*u*(3-2*u);
+    const sx=560,sy=130;
+    cur.style.display='block';cur.style.transform=`translate(${sx+(tx-sx)*e}px,${sy+(ty-sy)*e}px)`;
+    if(t>=8.0) cur.style.opacity=Math.max(0,1-(t-8.0)/0.6); else cur.style.opacity=1;
+  } else cur.style.display='none';
+  sc.classList.toggle('press',t>=7.3&&t<7.55);
+}
+window.setT=setT;
+// pane
+const GR=[['Messages',2,126.0],['System',1,16.5],['MCP',3,14.0],['Memory & skills',0,10.5],['Other',4,2.0].slice(0,3)];
+function pane(){
+  const dark=document.documentElement.dataset.theme==='dark';
+  const L=['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4'],D=['#3987e5','#d95926','#199e70','#c98500','#d55181'];
+  const cols=dark?D:L;
+  const g=[['Messages',0,137.5],['System',1,16.5],['MCP',2,14.0],['Memory & skills',3,10.5],['Other',4,2.0]];
+  $('groups').innerHTML=g.map(([n,s,v])=>`<div class="li"><i style="background:${cols[s]}"></i><span class="k">${n}</span><b>${v.toFixed(1)}k</b></div>`).join('');
+  $('pbar').innerHTML=BARS.final.l;
+}
+if(q.get('view')==='pane'){$('shot').style.display='none';$('pane').style.display='block';$('pane').id='pane';pane()}
+else setT(+q.get('t')||0);
+</script></body></html>

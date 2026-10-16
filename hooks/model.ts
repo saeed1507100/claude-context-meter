@@ -1,6 +1,6 @@
 import type { SessionContextBreakdown, SessionContextUsage, SessionRateLimit } from 'claude-code'
 
-import type { Breakdown, Fill, Group, Level, Slice } from '../types'
+import type { Breakdown, Fill, Group, Level, Limits, Slice } from '../types'
 
 export const ELEVATED_TOKENS = 100_000
 export const HIGH_TOKENS = 200_000
@@ -33,21 +33,19 @@ export const toBreakdown = (b: SessionContextBreakdown): Breakdown => {
   return { slices, deferred, mcpServers: top(servers, 8), memoryFiles: top(files, 8) }
 }
 
-export const fiveHourOf = (limits: readonly SessionRateLimit[]) =>
-  limits.find(l => l.kind === 'five_hour')?.percentUsed ?? null
+const windowAt = (limits: readonly SessionRateLimit[], kind: string) => limits.find(l => l.kind === kind)
+
+/** The limit windows the last reply reported, or null when it reported none. */
+export const limitsOfReply = (limits: readonly SessionRateLimit[]): Limits | null => {
+  const five = windowAt(limits, 'five_hour')
+  const week = windowAt(limits, 'seven_day')
+  if (five === undefined && week === undefined) return null
+  const at = (w?: SessionRateLimit) => (w?.resetsAt === undefined ? null : Date.parse(w.resetsAt) || null)
+  return { fiveHour: five?.percentUsed ?? null, fiveHourResetsAt: at(five), weekly: week?.percentUsed ?? null, weeklyResetsAt: at(week) }
+}
 
 export const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 export const POLL_MS = 60_000
-
-/** The account-wide 5-hour utilization from the usage endpoint's body, or null when it is not there. */
-export const parseFiveHour = (text: string): number | null => {
-  try {
-    const v = (JSON.parse(text) as { five_hour?: { utilization?: unknown } }).five_hour?.utilization
-    return typeof v === 'number' ? v : null
-  } catch {
-    return null
-  }
-}
 
 export const levelOf = (fill: Fill | null, fiveHour: number | null): Level => {
   if (fill === null) return 'ok'
@@ -57,11 +55,12 @@ export const levelOf = (fill: Fill | null, fiveHour: number | null): Level => {
   return 'ok'
 }
 
-export const adviceOf = (level: Level, fill: Fill, fiveHour: number | null) => {
-  if (level === 'ok') return null
-  const limit = fiveHour === null ? '' : ` · 5h limit ${Math.round(fiveHour)}%`
-  return `Each turn re-reads ${fmt(fill.tokens)}${limit}`
-}
+const RANK: Record<Level, number> = { ok: 0, elevated: 1, high: 2 }
+
+/** The worse of two levels. */
+export const worst = (a: Level, b: Level): Level => (RANK[a] >= RANK[b] ? a : b)
+
+export const rankOf = (l: Level) => RANK[l]
 
 export const SAVE_PROMPT = [
   'Context is getting large. Before we continue, checkpoint this session:',

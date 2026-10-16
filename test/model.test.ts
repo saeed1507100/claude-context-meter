@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { adviceOf, fmt, parseFiveHour, levelOf, meterSvg, partsOf, textMeter, toBreakdown, toFill } from '../hooks/model'
+import { fmt, levelOf, limitsOfReply, meterSvg, partsOf, textMeter, toBreakdown, toFill } from '../hooks/model'
 
 const fill = (tokens: number, window = 1_000_000) => ({ tokens, window, percent: Math.round((tokens / window) * 100) })
 
@@ -18,13 +18,6 @@ describe('levelOf', () => {
   })
   test('no measurement is ok', async () => {
     expect(levelOf(null, 90)).toBe('ok')
-  })
-})
-
-describe('adviceOf', () => {
-  test('silent when ok, names tokens and the 5-hour limit otherwise', async () => {
-    expect(adviceOf('ok', fill(10_000), null)).toBe(null)
-    expect(adviceOf('high', fill(250_000), 63.4)).toBe('Each turn re-reads 250.0k · 5h limit 63%')
   })
 })
 
@@ -80,8 +73,12 @@ test('the terminal meter sizes parts to the window', async () => {
   expect(fmt(1_250_000)).toBe('1.3M')
 })
 
-test('parseFiveHour reads the account window and ignores anything else', async () => {
-  expect(parseFiveHour('{"five_hour":{"utilization":37.5,"resets_at":"x"},"seven_day":{"utilization":20}}')).toBe(37.5)
-  expect(parseFiveHour('{"seven_day":{"utilization":20}}')).toBe(null)
-  expect(parseFiveHour('<html>')).toBe(null)
+test('limitsOfReply reads both windows from the reply', async () => {
+  expect(limitsOfReply([])).toBe(null)
+  expect(
+    limitsOfReply([
+      { kind: 'five_hour', percentUsed: 40, resetsAt: '2026-10-16T12:00:00Z' },
+      { kind: 'seven_day', percentUsed: 12 },
+    ]),
+  ).toEqual({ fiveHour: 40, fiveHourResetsAt: Date.parse('2026-10-16T12:00:00Z'), weekly: 12, weeklyResetsAt: null })
 })

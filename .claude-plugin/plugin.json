@@ -1,9 +1,40 @@
 {
   "name": "context-meter",
-  "version": "0.1.0",
-  "description": "Live context-window meter above the prompt: a hoverable breakdown bar, a detail pane, and a nudge to save state and compact before a large context burns your session limit.",
-  "author": { "name": "Saeed Anwar Khan" },
+  "version": "1.0.0",
+  "description": "Context-window meter and usage-limit budget for Claude Code: a hoverable breakdown bar above the prompt, per-turn 5-hour burn, pace and daily weekly budget alerts, and one-click save & compact.",
+  "author": {
+    "name": "Saeed Anwar Khan"
+  },
   "license": "MIT",
-  "keywords": ["context", "tokens", "usage", "compact"],
-  "types": "./types/index.d.ts"
+  "keywords": [
+    "context",
+    "tokens",
+    "usage",
+    "limits",
+    "compact",
+    "budget"
+  ],
+  "types": "./types/index.d.ts",
+  "homepage": "https://github.com/saeed1507100/claude-context-meter",
+  "repository": "https://github.com/saeed1507100/claude-context-meter",
+  "userConfig": {
+    "targetHours": {
+      "type": "number",
+      "title": "Target hours per 5-hour window",
+      "description": "Warn when the pace would use up the 5-hour limit sooner than this.",
+      "default": 4
+    },
+    "turnAlertPercent": {
+      "type": "number",
+      "title": "Per-turn alert (% of 5-hour limit)",
+      "description": "Flag a turn that uses more than this share of the 5-hour window.",
+      "default": 2
+    },
+    "dailyWeeklyPercent": {
+      "type": "number",
+      "title": "Daily share of weekly limit (%)",
+      "description": "Warn when today has used more than this share of the weekly limit.",
+      "default": 20
+    }
+  }
 }
