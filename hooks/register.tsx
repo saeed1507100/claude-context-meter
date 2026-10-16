@@ -6,13 +6,13 @@ import {
   COMPACT_INSTRUCTIONS,
   SAVE_PROMPT,
   adviceOf,
-  barSvg,
-  colorOf,
   fiveHourOf,
   fmt,
   levelOf,
-  rowsSvg,
-  textBar,
+  meterSvg,
+  partsOf,
+  swatch,
+  textMeter,
   toBreakdown,
   toFill,
 } from './model'
@@ -75,12 +75,8 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'context-meter' }, async $ => {
-    const opened = await openPane($)
-    const usage = await $.session.usage()
-    const f = await read($, fill)
-    return {
-      text: `Context pane ${opened.isPlaced ? 'opened' : 'not placed by this surface'}. usage.context=${JSON.stringify(usage.context)} stored=${JSON.stringify(f)}`,
-    }
+    await openPane($)
+    return { text: 'Context pane opened.' }
   })
 
   on('turn.complete', async ($, e, next) => {
@@ -94,29 +90,25 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const f = await read($, fill)
-    if (e.props.hasSurvey) return next(e)
-    if (f === null) {
-      const { Text } = $.ui.resolve(e)
-      return <Text dimColor>Context: waiting for the first reply ({e.surface})</Text>
-    }
+    if (e.props.hasSurvey || f === null) return next(e)
 
     const b = await read($, breakdown)
     const hourly = await read($, fiveHour)
     const level = levelOf(f, hourly)
     const advice = (await read($, isDismissed)) ? null : adviceOf(level, f, hourly)
-    const color = level === 'high' ? 'red' : level === 'elevated' ? 'yellow' : undefined
-    const label = `Context ${fmt(f.tokens)} / ${fmt(f.window)} (${f.percent}%)`
+    const tone = level === 'high' ? 'error' : 'warning'
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
     const Svg = 'Svg' in ui ? ui.Svg : undefined
+    const figure = `${fmt(f.tokens)} / ${fmt(f.window)}`
 
-    const bar =
+    const meter =
       b === null ? null : Svg !== undefined ? (
-        <Svg source={barSvg(b.slices)} alt={label} height={12} isInteractive />
+        <Svg source={meterSvg(b.slices, f.window, 160, 6)} alt={`Context ${figure}, ${f.percent}%`} width={160} height={6} isInteractive />
       ) : (
         <Text>
-          {textBar(b.slices, Math.max(10, Math.min(40, (e.props.bodyColumns ?? 60) - label.length - 14))).map(p => (
-            <Text color={colorOf(p.s.name, p.i).slice(0, 7)}>{'█'.repeat(p.cells)}</Text>
+          {textMeter(b.slices, f.window, 20).map(m => (
+            <Text color={swatch(m.p.slot)}>{'━'.repeat(m.cells)}</Text>
           ))}
         </Text>
       )
@@ -124,16 +116,20 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         <Box flexDirection="row" gap={1} alignItems="center">
-          <Text color={color} dimColor={color === undefined}>{label}</Text>
-          {bar !== null && <Box flexGrow={1}>{bar}</Box>}
+          <Text dimColor>Context</Text>
+          {meter}
+          <Text>{figure}</Text>
+          <Text dimColor>{f.percent}%</Text>
+          <Box flexGrow={1} />
           <Button key="details" label="Details" plain onPress={() => openPane($)} />
         </Box>
         {advice !== null && (
-          <Box flexDirection="row" gap={1} flexWrap="wrap">
-            <Text color={color}>{advice}</Text>
+          <Box flexDirection="row" gap={1} alignItems="center">
+            <Text color={tone}>▲</Text>
+            <Text dimColor>{advice}</Text>
+            <Box flexGrow={1} />
             <Button key="save-compact" label="Save & compact" variant="primary" onPress={() => saveAndCompact($)} />
-            <Button key="save" label="Save only" onPress={() => saveState($)} />
-            <Button key="dismiss" label="Dismiss" onPress={() => update($, isDismissed, () => true)} />
+            <Button key="dismiss" label="Later" plain onPress={() => update($, isDismissed, () => true)} />
           </Box>
         )}
       </Box>
@@ -143,66 +139,65 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
+    const Svg = 'Svg' in ui ? ui.Svg : undefined
     const f = await read($, fill)
     const b = await read($, breakdown)
     const hourly = await read($, fiveHour)
-    if (f === null || b === null) return <Text dimColor>No measurement yet: send a message first.</Text>
+    if (f === null || b === null) return <Text dimColor>Waiting for the first reply.</Text>
 
     const level = levelOf(f, hourly)
     const advice = adviceOf(level, f, hourly)
-    const used = b.slices.filter(s => s.kind === 'used')
-    const Svg = 'Svg' in ui ? ui.Svg : undefined
+    const parts = partsOf(b.slices)
+    const col = (s: string, n: number) => s.slice(0, n).padEnd(n)
 
     return (
       <Box flexDirection="column" gap={1}>
-        <Text bold>
-          {fmt(f.tokens)} of {fmt(f.window)} tokens ({f.percent}%)
-          {hourly === null ? '' : ` · 5-hour limit ${Math.round(hourly)}%`}
-        </Text>
-        {Svg !== undefined ? (
-          <Box flexDirection="column" gap={1}>
-            <Svg source={barSvg(b.slices, 18)} alt="Whole window by category" height={18} isInteractive />
-            <Svg source={rowsSvg(used)} alt="Tokens in use by category" isInteractive />
-          </Box>
-        ) : (
-          <Box flexDirection="column">
-            {used.map((s, i) => (
-              <Text>
-                <Text color={colorOf(s.name, i).slice(0, 7)}>■ </Text>
-                {s.name.padEnd(26)} {fmt(s.tokens).padStart(7)}
-              </Text>
-            ))}
-          </Box>
+        <Box flexDirection="row" gap={1} alignItems="flex-end">
+          <Text bold>{fmt(f.tokens)}</Text>
+          <Text dimColor>
+            of {fmt(f.window)} · {f.percent}%{hourly === null ? '' : ` · 5h limit ${Math.round(hourly)}%`}
+          </Text>
+        </Box>
+        {Svg !== undefined && (
+          <Svg source={meterSvg(b.slices, f.window, 320, 10)} alt="Context window by group" width={320} height={10} isInteractive />
         )}
-        <Text dimColor>
-          Deferred tool schemas (loaded on demand, not in the window): {fmt(b.deferred)}
-        </Text>
+        <Box flexDirection="column">
+          {parts.map(p => (
+            <Text>
+              <Text color={swatch(p.slot)}>■ </Text>
+              {col(p.name, 18)}
+              <Text dimColor>{fmt(p.tokens).padStart(7)}</Text>
+            </Text>
+          ))}
+          <Text dimColor>
+            {'  '}
+            {col('Deferred tools', 18)}
+            {fmt(b.deferred).padStart(7)} (not in window)
+          </Text>
+        </Box>
         {b.mcpServers.length > 0 && (
           <Box flexDirection="column">
-            <Text bold>Largest MCP servers</Text>
-            {b.mcpServers.map(g => (
-              <Text dimColor>
-                {g.name.slice(0, 40).padEnd(42)} {fmt(g.tokens).padStart(7)}
+            <Text dimColor>MCP servers</Text>
+            {b.mcpServers.slice(0, 5).map(g => (
+              <Text>
+                {'  '}
+                {col(g.name, 30)}
+                <Text dimColor>{fmt(g.tokens).padStart(7)}</Text>
               </Text>
             ))}
           </Box>
         )}
-        {b.memoryFiles.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold>Memory files</Text>
-            {b.memoryFiles.map(g => (
-              <Text dimColor>
-                {g.name.split('/').slice(-3).join('/').padEnd(42)} {fmt(g.tokens).padStart(7)}
-              </Text>
-            ))}
-          </Box>
+        {advice !== null && (
+          <Text>
+            <Text color={level === 'high' ? 'error' : 'warning'}>▲ </Text>
+            <Text dimColor>{advice}</Text>
+          </Text>
         )}
-        {advice !== null && <Text color={level === 'high' ? 'red' : 'yellow'}>{advice}</Text>}
         <Box flexDirection="row" gap={1}>
           <Button key="save-compact" label="Save & compact" variant="primary" hotkey="s" onPress={() => saveAndCompact($)} />
-          <Button key="save" label="Save only" hotkey="v" onPress={() => saveState($)} />
-          <Button key="compact" label="Compact now" hotkey="c" onPress={() => compact($)} />
-          <Button key="refresh" label="Refresh" hotkey="r" onPress={() => measure($)} />
+          <Button key="save" label="Save" hotkey="v" onPress={() => saveState($)} />
+          <Button key="compact" label="Compact" hotkey="c" onPress={() => compact($)} />
+          <Button key="refresh" label="Refresh" hotkey="r" plain onPress={() => measure($)} />
         </Box>
       </Box>
     )

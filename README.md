@@ -6,8 +6,8 @@ A Claude Code plugin that keeps your context window in view.
 - **Detail pane.** Click **Details**, or run `/context-meter`, to open a pane with a per-category chart, the largest MCP servers, your memory files, and deferred tool schemas.
 - **Save-and-compact nudge.** Every turn re-sends the whole context, so a large context uses up your 5-hour session limit faster. Past 100k tokens (or sooner while the 5-hour limit is above 50%), the meter turns yellow or red and offers:
   - **Save & compact**: asks Claude to write down facts, progress, plan and decisions (in the project's notes file, or a `HANDOFF.md`), then compacts once that turn finishes.
-  - **Save only** and **Compact now**, for doing one step yourself.
-  - **Dismiss**, which hides the nudge until the context crosses the next threshold.
+  - **Save** and **Compact** (in the pane), for doing one step yourself.
+  - **Later**, which hides the nudge until the context crosses the next threshold.
 
 ## Install
 

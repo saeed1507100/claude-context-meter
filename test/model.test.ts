@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { adviceOf, barSvg, fmt, levelOf, textBar, toBreakdown, toFill } from '../hooks/model'
+import { adviceOf, fmt, levelOf, meterSvg, partsOf, textMeter, toBreakdown, toFill } from '../hooks/model'
 
 const fill = (tokens: number, window = 1_000_000) => ({ tokens, window, percent: Math.round((tokens / window) * 100) })
 
@@ -24,10 +24,7 @@ describe('levelOf', () => {
 describe('adviceOf', () => {
   test('silent when ok, names tokens and the 5-hour limit otherwise', async () => {
     expect(adviceOf('ok', fill(10_000), null)).toBe(null)
-    const text = adviceOf('high', fill(250_000), 63.4)
-    expect(text).toContain('250.0k')
-    expect(text).toContain('63%')
-    expect(text).toContain('compact')
+    expect(adviceOf('high', fill(250_000), 63.4)).toBe('Each turn re-reads 250.0k · 5h limit 63%')
   })
 })
 
@@ -55,18 +52,30 @@ test('toBreakdown keeps deferred out of the slices and groups MCP tools by serve
   expect(b.mcpServers).toEqual([{ name: 'notion', tokens: 500 }, { name: 'neon', tokens: 100 }])
 })
 
-test('the bar carries a hover tooltip per category and escapes names', async () => {
-  const svg = barSvg([
-    { name: 'Messages', tokens: 1000, kind: 'used' },
-    { name: 'A<b>', tokens: 3000, kind: 'used' },
+test('the meter groups categories, scales to the window, and tooltips each group', async () => {
+  const slices = [
+    { name: 'Messages', tokens: 100_000, kind: 'used' as const },
+    { name: 'System prompt', tokens: 10_000, kind: 'used' as const },
+    { name: 'System tools', tokens: 10_000, kind: 'used' as const },
+    { name: 'A<b>', tokens: 5_000, kind: 'used' as const },
+    { name: 'Free space', tokens: 842_000, kind: 'free' as const },
+    { name: 'Autocompact buffer', tokens: 33_000, kind: 'buffer' as const },
+  ]
+  expect(partsOf(slices).map(p => [p.name, p.tokens])).toEqual([
+    ['Messages', 100_000],
+    ['System', 20_000],
+    ['Other', 5_000],
   ])
-  expect(svg).toContain('<title>Messages: 1.0k tokens (25.0%)</title>')
+  const svg = meterSvg(slices, 1_000_000, 200, 6)
+  expect(svg).toContain('<title>Messages · 100.0k · 10.0%')
   expect(svg).toContain('A&lt;b&gt;')
+  expect(svg).toContain('prefers-color-scheme:dark')
+  expect(svg).toContain('Autocompact buffer')
   expect(svg).not.toContain('<script')
 })
 
-test('the terminal bar fills its width', async () => {
-  const cells = textBar([{ name: 'a', tokens: 1, kind: 'used' }, { name: 'b', tokens: 3, kind: 'free' }], 20)
-  expect(cells.reduce((n, p) => n + p.cells, 0)).toBe(20)
+test('the terminal meter sizes parts to the window', async () => {
+  const cells = textMeter([{ name: 'Messages', tokens: 500, kind: 'used' }], 1000, 20)
+  expect(cells[0]!.cells).toBe(10)
   expect(fmt(1_250_000)).toBe('1.3M')
 })
