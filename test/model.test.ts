@@ -37,6 +37,7 @@ test('toBreakdown keeps deferred out of the slices and groups MCP tools by serve
       { name: 'a', serverName: 'notion', tokens: 300, isLoaded: true },
       { name: 'b', serverName: 'notion', tokens: 200, isLoaded: true },
       { name: 'c', serverName: 'neon', tokens: 100, isLoaded: true },
+      { name: 'd', serverName: 'notion', tokens: 9_000, isLoaded: false },
     ],
     memoryFiles: [{ path: '/x/CLAUDE.md', type: 'Project', tokens: 740 }],
   } as never)

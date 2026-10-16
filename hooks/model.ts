@@ -28,8 +28,9 @@ export const toBreakdown = (b: SessionContextBreakdown): Breakdown => {
   const servers = new Map<string, number>()
   const mcpToolServer: Record<string, string> = {}
   for (const t of b.mcpTools) {
-    servers.set(t.serverName, (servers.get(t.serverName) ?? 0) + t.tokens)
     mcpToolServer[t.name] = t.serverName
+    // A deferred schema is outside the window until searched for, so it costs no context yet.
+    if (t.isLoaded) servers.set(t.serverName, (servers.get(t.serverName) ?? 0) + t.tokens)
   }
   const files = new Map<string, number>()
   for (const f of b.memoryFiles) files.set(f.path, f.tokens)

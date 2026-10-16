@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — 2026-10-16
 
 - Biggest component: the pane names the largest single item in the context (an MCP server, memory file, skills, messages or system) and judges whether the session needs it. An MCP server with no tool calls after 3 turns raises a tip to disable it.
+- Fix: the MCP server list counted deferred schemas that are not in the window.
 
 ## 1.0.0 — 2026-10-16
 
