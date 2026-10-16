@@ -308,11 +308,11 @@ export const register: Register = (on, options) => {
         </Box>
         {b.mcpServers.length > 0 && (
           <Box flexDirection="column">
-            <Text dimColor>MCP servers</Text>
+            <Text dimColor>MCP servers & claude.ai connectors</Text>
             {b.mcpServers.slice(0, 5).map(g => (
               <Text>
                 {'  '}
-                {col(g.name, 30)}
+                {col(g.label ?? g.name, 30)}
                 <Text dimColor>{fmt(g.tokens).padStart(7)}</Text>
               </Text>
             ))}

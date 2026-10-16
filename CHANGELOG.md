@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0 — 2026-10-16
+
+- claude.ai connectors, listed by id, are named after their product (`Notion (claude.ai connector)`) and kept apart from MCP servers in the pane and tips.
+
 ## 1.1.0 — 2026-10-16
 
 - Biggest component: the pane names the largest single item in the context (an MCP server, memory file, skills, messages or system) and judges whether the session needs it. An MCP server with no tool calls after 3 turns raises a tip to disable it.

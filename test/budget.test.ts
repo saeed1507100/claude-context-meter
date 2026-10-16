@@ -112,3 +112,11 @@ test('serverOfTool credits calls by schema, else by the wire-name prefix', async
   expect(serverOfTool('mcp__plugin_github_github__search', b)).toBe('plugin:github:github')
   expect(serverOfTool('Bash', b)).toBe(null)
 })
+
+test('a claude.ai connector is named as one, not as an MCP server', async () => {
+  const breakdown = { slices: [], deferred: 0, mcpServers: [{ name: 'f64888b7-81de-469d-8abd-884cca000000', tokens: 30_000, label: 'Notion (claude.ai connector)' }], memoryFiles: [], mcpToolServer: {} }
+  const b = biggestOf({ fill: fill(60_000), breakdown, mcpCalls: {}, turns: 3 })!
+  expect(b.kind).toBe('connector')
+  const [tip] = tipsOf({ fill: fill(60_000), breakdown, limits: null, lastTurn: null, weeklyToday: null, biggest: b, budget: DEFAULT_BUDGET, now: 0 })
+  expect(tip!.text).toBe("Biggest: Notion (claude.ai connector) 30.0k (50%), no calls this session: disable it if this task won't need it")
+})

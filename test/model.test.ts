@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { fmt, levelOf, limitsOfReply, meterSvg, partsOf, textMeter, toBreakdown, toFill } from '../hooks/model'
+import { fmt, levelOf, limitsOfReply, meterSvg, partsOf, textMeter, labelOfServer, toBreakdown, toFill } from '../hooks/model'
 
 const fill = (tokens: number, window = 1_000_000) => ({ tokens, window, percent: Math.round((tokens / window) * 100) })
 
@@ -82,4 +82,18 @@ test('limitsOfReply reads both windows from the reply', async () => {
       { kind: 'seven_day', percentUsed: 12 },
     ]),
   ).toEqual({ fiveHour: 40, fiveHourResetsAt: Date.parse('2026-10-16T12:00:00Z'), weekly: 12, weeklyResetsAt: null })
+})
+
+test('a connector listed by id is named after the product its tools mention', async () => {
+  const id = 'a394ef0f-e2a2-407b-94e1-863c42aaaaaa'
+  expect(labelOfServer(id, ['getJiraIssue', 'searchConfluenceUsingCql', 'fetch'])).toBe('Atlassian (claude.ai connector)')
+  expect(labelOfServer(id, ['notion-search', 'notion-fetch'])).toBe('Notion (claude.ai connector)')
+  expect(labelOfServer(id, ['fetch'])).toBe('claude.ai connector a394ef0f')
+  expect(labelOfServer('Neon', ['run_sql'])).toBe(undefined)
+  const b = toBreakdown({
+    categories: [],
+    mcpTools: [{ name: `mcp__${id}__notion-search`, serverName: id, tokens: 50, isLoaded: true }],
+    memoryFiles: [],
+  } as never)
+  expect(b.mcpServers).toEqual([{ name: id, tokens: 50, label: 'Notion (claude.ai connector)' }])
 })

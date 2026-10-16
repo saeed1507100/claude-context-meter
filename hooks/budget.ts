@@ -114,7 +114,7 @@ export const biggestOf = (args: {
     ...breakdown.mcpServers.map(s => {
       const calls = mcpCalls[s.name] ?? 0
       const verdict: Verdict = calls > 0 ? 'needed' : turns < UNUSED_AFTER_TURNS ? 'too-early' : 'unused'
-      return { kind: 'mcp' as const, name: s.name, tokens: s.tokens, calls, verdict }
+      return { kind: s.label === undefined ? ('mcp' as const) : ('connector' as const), name: s.label ?? s.name, tokens: s.tokens, calls, verdict }
     }),
     ...breakdown.memoryFiles.map(f => ({ kind: 'memory' as const, name: f.name, tokens: f.tokens, calls: 0, verdict: 'unknown' as const })),
     { kind: 'messages', name: 'Messages', tokens: slice('Messages'), calls: 0, verdict: 'conversation' },
@@ -189,7 +189,7 @@ export const tipsOf = (args: {
   const mcp = breakdown?.mcpServers.reduce((n, s) => n + s.tokens, 0) ?? 0
   if (mcp >= MCP_HEAVY && breakdown !== null && !isBiggestUnused) {
     const top = breakdown.mcpServers[0]!
-    tips.push({ tone: 'elevated', text: `MCP tools hold ${fmt(mcp)} (${top.name} ${fmt(top.tokens)}): disable servers you are not using` })
+    tips.push({ tone: 'elevated', text: `MCP tools hold ${fmt(mcp)} (${top.label ?? top.name} ${fmt(top.tokens)}): disable servers you are not using` })
   }
   if (weeklyToday !== null && weeklyToday >= budget.dailyWeeklyPercent * 0.8) {
     tips.push({

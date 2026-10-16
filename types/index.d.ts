@@ -2,7 +2,8 @@ export type Fill = { tokens: number; window: number; percent: number }
 
 export type Slice = { name: string; tokens: number; kind: 'used' | 'free' | 'buffer' }
 
-export type Group = { name: string; tokens: number }
+/** `label` is a readable name for a server listed only by id, such as a claude.ai connector. */
+export type Group = { name: string; tokens: number; label?: string }
 
 export type Breakdown = {
   slices: Slice[]
@@ -26,7 +27,7 @@ export type Limits = {
 /** Whether the session needs its biggest component, judged from what it has used. */
 export type Verdict = 'needed' | 'unused' | 'too-early' | 'conversation' | 'fixed' | 'unknown'
 
-export type Biggest = { kind: 'mcp' | 'memory' | 'messages' | 'skills' | 'system'; name: string; tokens: number; share: number; calls: number; verdict: Verdict }
+export type Biggest = { kind: 'mcp' | 'connector' | 'memory' | 'messages' | 'skills' | 'system'; name: string; tokens: number; share: number; calls: number; verdict: Verdict }
 
 export type Tip = { tone: Exclude<Level, 'ok'>; text: string }
 

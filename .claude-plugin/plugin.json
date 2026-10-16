@@ -1,6 +1,6 @@
 {
   "name": "context-meter",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Context-window meter and usage-limit budget for Claude Code: a hoverable breakdown bar above the prompt, per-turn 5-hour burn, pace and daily weekly budget alerts, and one-click save & compact.",
   "author": {
     "name": "Saeed Anwar Khan"

@@ -15,6 +15,36 @@ export const toFill = (c: SessionContextUsage): Fill | null =>
     ? null
     : { tokens: c.tokens, window: c.window, percent: c.percent ?? Math.round((c.tokens / c.window) * 100) }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Product words in connector tool names, to the product they belong to.
+const PRODUCTS: [RegExp, string][] = [
+  [/notion/i, 'Notion'],
+  [/jira|confluence|compass|atlassian/i, 'Atlassian'],
+  [/gmail/i, 'Gmail'],
+  [/calendar/i, 'Google Calendar'],
+  [/drive|docs|sheets/i, 'Google Drive'],
+  [/slack/i, 'Slack'],
+  [/linear/i, 'Linear'],
+  [/github/i, 'GitHub'],
+  [/asana/i, 'Asana'],
+  [/figma/i, 'Figma'],
+  [/hubspot/i, 'HubSpot'],
+  [/intercom/i, 'Intercom'],
+  [/stripe/i, 'Stripe'],
+  [/sentry/i, 'Sentry'],
+]
+
+/**
+ * A readable name for a server the breakdown lists only by id (a claude.ai connector),
+ * from the product its tool names mention most; a short id when none matches.
+ */
+export const labelOfServer = (server: string, tools: readonly string[]): string | undefined => {
+  if (!UUID.test(server)) return undefined
+  const hits = PRODUCTS.map(([re, name]) => ({ name, n: tools.filter(t => re.test(t)).length })).sort((a, b) => b.n - a.n)
+  return hits[0]!.n > 0 ? `${hits[0]!.name} (claude.ai connector)` : `claude.ai connector ${server.slice(0, 8)}`
+}
+
 const top = (groups: Map<string, number>, n: number): Group[] =>
   [...groups].map(([name, tokens]) => ({ name, tokens })).sort((a, b) => b.tokens - a.tokens).slice(0, n)
 
@@ -27,15 +57,21 @@ export const toBreakdown = (b: SessionContextBreakdown): Breakdown => {
   }
   const servers = new Map<string, number>()
   const mcpToolServer: Record<string, string> = {}
+  const toolsOf = new Map<string, string[]>()
   for (const t of b.mcpTools) {
     mcpToolServer[t.name] = t.serverName
+    toolsOf.set(t.serverName, [...(toolsOf.get(t.serverName) ?? []), t.name.split('__').pop() ?? t.name])
     // A deferred schema is outside the window until searched for, so it costs no context yet.
     if (t.isLoaded) servers.set(t.serverName, (servers.get(t.serverName) ?? 0) + t.tokens)
   }
   const files = new Map<string, number>()
   for (const f of b.memoryFiles) files.set(f.path, f.tokens)
 
-  return { slices, deferred, mcpServers: top(servers, 8), memoryFiles: top(files, 8), mcpToolServer }
+  const mcpServers = top(servers, 8).map(g => {
+    const label = labelOfServer(g.name, toolsOf.get(g.name) ?? [])
+    return label === undefined ? g : { ...g, label }
+  })
+  return { slices, deferred, mcpServers, memoryFiles: top(files, 8), mcpToolServer }
 }
 
 /**
