@@ -14,7 +14,7 @@ A Claude Code plugin that keeps your context window in view.
 Run this in a Claude Code terminal session:
 
 ```
-/plugin install context-meter --marketplace saeed1507100/context-meter
+/plugin install context-meter --marketplace saeed1507100/claude-context-meter
 ```
 
 Answer `y` to add the marketplace, then pick a scope. Choose the user scope to have it in every session, desktop app included.
