@@ -1,0 +1,13 @@
+{
+  "name": "context-meter",
+  "owner": {
+    "name": "Saeed Anwar Khan"
+  },
+  "plugins": [
+    {
+      "name": "context-meter",
+      "source": "./"
+    }
+  ],
+  "description": "Context-window meter plugin for Claude Code"
+}

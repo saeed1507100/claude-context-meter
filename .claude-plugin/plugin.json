@@ -1,0 +1,9 @@
+{
+  "name": "context-meter",
+  "version": "0.1.0",
+  "description": "Live context-window meter above the prompt: a hoverable breakdown bar, a detail pane, and a nudge to save state and compact before a large context burns your session limit.",
+  "author": { "name": "Saeed Anwar Khan" },
+  "license": "MIT",
+  "keywords": ["context", "tokens", "usage", "compact"],
+  "types": "./types/index.d.ts"
+}
