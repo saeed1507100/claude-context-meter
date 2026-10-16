@@ -9,6 +9,8 @@ export type Breakdown = {
   deferred: number
   mcpServers: Group[]
   memoryFiles: Group[]
+  /** Each MCP tool's wire name to its server, so a call can be credited to the server. */
+  mcpToolServer: Record<string, string>
 }
 
 export type Level = 'ok' | 'elevated' | 'high'
@@ -20,6 +22,11 @@ export type Limits = {
   weekly: number | null
   weeklyResetsAt: number | null
 }
+
+/** Whether the session needs its biggest component, judged from what it has used. */
+export type Verdict = 'needed' | 'unused' | 'too-early' | 'conversation' | 'fixed' | 'unknown'
+
+export type Biggest = { kind: 'mcp' | 'memory' | 'messages' | 'skills' | 'system'; name: string; tokens: number; share: number; calls: number; verdict: Verdict }
 
 export type Tip = { tone: Exclude<Level, 'ok'>; text: string }
 
@@ -36,6 +43,8 @@ declare module 'claude-code' {
       warnedLevel: Level
       isCompactPending: boolean
       isDismissed: boolean
+      mcpCalls: Record<string, number>
+      turns: number
     }
   }
 }

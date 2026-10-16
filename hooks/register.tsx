@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { Level, Limits } from '../types'
-import { baselineFor, budgetOf, parseLimits, tipsOf } from './budget'
+import { baselineFor, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
 import type { Budget } from './budget'
 import {
   COMPACT_INSTRUCTIONS,
@@ -16,6 +16,7 @@ import {
   meterSvg,
   partsOf,
   rankOf,
+  serverOfTool,
   swatch,
   textMeter,
   toBreakdown,
@@ -39,6 +40,8 @@ const weeklyToday = atom({ plugin: 'context-meter', key: 'weeklyToday' } as cons
 const warnedLevel = atom({ plugin: 'context-meter', key: 'warnedLevel' } as const, 'ok')
 const isCompactPending = atom({ plugin: 'context-meter', key: 'isCompactPending' } as const, false)
 const isDismissed = atom({ plugin: 'context-meter', key: 'isDismissed' } as const, false)
+const mcpCalls = atom({ plugin: 'context-meter', key: 'mcpCalls' } as const, {})
+const turns = atom({ plugin: 'context-meter', key: 'turns' } as const, 0)
 
 /** Records the limits, and today's share of the weekly limit against a baseline kept across sessions. */
 const setLimits = async ($: EngineInterface, l: Limits, source: 'live' | 'reply') => {
@@ -101,10 +104,14 @@ const snapshot = async ($: EngineInterface, budget: Budget) => {
   const l = await read($, limits)
   const turn = await read($, lastTurn)
   const today = await read($, weeklyToday)
+  const turnCount = await read($, turns)
+  const biggest = f === null || b === null ? null : biggestOf({ fill: f, breakdown: b, mcpCalls: await read($, mcpCalls), turns: turnCount })
   const tips =
-    f === null ? [] : tipsOf({ fill: f, breakdown: b, limits: l, lastTurn: turn, weeklyToday: today, budget, now: await $.clock.now() })
+    f === null
+      ? []
+      : tipsOf({ fill: f, breakdown: b, limits: l, lastTurn: turn, weeklyToday: today, biggest, budget, now: await $.clock.now() })
   const level = tips.reduce<Level>((acc, t) => worst(acc, t.tone), levelOf(f, l?.fiveHour ?? null))
-  return { f, b, l, turn, today, tips, level }
+  return { f, b, l, turn, today, tips, level, biggest, turnCount }
 }
 
 /** One toast each time the level rises; the nudge comes back with it. */
@@ -156,6 +163,16 @@ export const register: Register = (on, options) => {
     return { text: 'Context pane opened.' }
   })
 
+  on('tool.call', async ($, e, next) => {
+    const result = await next(e)
+    // Counting is a side note; it must never fail the tool call.
+    try {
+      const server = serverOfTool(e.tool, await read($, breakdown))
+      if (server !== null) await update($, mcpCalls, c => ({ ...c, [server]: (c[server] ?? 0) + 1 }))
+    } catch {}
+    return result
+  })
+
   on('turn.start', async ($, e, next) => {
     // Only a live reading at both ends gives a turn's cost; a cached one would be stale.
     const l = await pollLimits($)
@@ -166,6 +183,7 @@ export const register: Register = (on, options) => {
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     if (e.agentId !== undefined) return result
+    await update($, turns, n => n + 1)
     const before = await read($, turnStartFiveHour)
     const l = await pollLimits($)
     const after = l?.fiveHour ?? null
@@ -233,7 +251,7 @@ export const register: Register = (on, options) => {
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
     const Svg = 'Svg' in ui ? ui.Svg : undefined
-    const { f, b, l, turn, today, tips } = await snapshot($, budget)
+    const { f, b, l, turn, today, tips, biggest, turnCount } = await snapshot($, budget)
     if (f === null || b === null) return <Text dimColor>Waiting for the first reply.</Text>
     const source = await read($, limitSource)
     const parts = partsOf(b.slices)
@@ -271,6 +289,16 @@ export const register: Register = (on, options) => {
             {fmt(b.deferred).padStart(7)} (not in window)
           </Text>
         </Box>
+        {biggest !== null && (
+          <Box flexDirection="column">
+            <Text dimColor>Biggest component</Text>
+            <Text>
+              {'  '}
+              {biggestText(biggest)}
+              <Text dimColor> · {verdictText(biggest, turnCount)}</Text>
+            </Text>
+          </Box>
+        )}
         <Box flexDirection="column">
           <Text dimColor>Usage limits{source === 'reply' ? ' (as of last reply)' : ''}</Text>
           {row('5-hour window', pctText(l?.fiveHour ?? null), `aim: last ${budget.targetHours}h`)}

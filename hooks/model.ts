@@ -26,11 +26,26 @@ export const toBreakdown = (b: SessionContextBreakdown): Breakdown => {
     else if (c.tokens > 0) slices.push({ name: c.name, tokens: c.tokens, kind: c.kind })
   }
   const servers = new Map<string, number>()
-  for (const t of b.mcpTools) servers.set(t.serverName, (servers.get(t.serverName) ?? 0) + t.tokens)
+  const mcpToolServer: Record<string, string> = {}
+  for (const t of b.mcpTools) {
+    servers.set(t.serverName, (servers.get(t.serverName) ?? 0) + t.tokens)
+    mcpToolServer[t.name] = t.serverName
+  }
   const files = new Map<string, number>()
   for (const f of b.memoryFiles) files.set(f.path, f.tokens)
 
-  return { slices, deferred, mcpServers: top(servers, 8), memoryFiles: top(files, 8) }
+  return { slices, deferred, mcpServers: top(servers, 8), memoryFiles: top(files, 8), mcpToolServer }
+}
+
+/**
+ * The server an MCP tool call belongs to: from the breakdown's schemas, else by the
+ * wire name's `mcp__<server>__` prefix, which spells the server with `_` for other characters.
+ */
+export const serverOfTool = (tool: string, b: Breakdown | null): string | null => {
+  if (!tool.startsWith('mcp__')) return null
+  const known = b?.mcpToolServer[tool]
+  if (known !== undefined) return known
+  return b?.mcpServers.find(s => tool.startsWith(`mcp__${s.name.replace(/[^A-Za-z0-9_-]/g, '_')}__`))?.name ?? null
 }
 
 const windowAt = (limits: readonly SessionRateLimit[], kind: string) => limits.find(l => l.kind === kind)

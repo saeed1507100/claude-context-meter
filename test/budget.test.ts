@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { DEFAULT_BUDGET, baselineFor, budgetOf, dayKey, hoursLeftAtPace, isPaceHigh, parseLimits, tipsOf } from '../hooks/budget'
+import { serverOfTool } from '../hooks/model'
+import { DEFAULT_BUDGET, baselineFor, biggestOf, budgetOf, dayKey, hoursLeftAtPace, isPaceHigh, parseLimits, tipsOf, verdictText } from '../hooks/budget'
 
 const H = 3_600_000
 const fill = (tokens: number) => ({ tokens, window: 1_000_000, percent: Math.round(tokens / 10_000) })
@@ -64,4 +65,50 @@ describe('tipsOf', () => {
     expect(tipsOf({ ...base, fill: fill(1000), lastTurn: null, weeklyToday: 21 })[0]!.tone).toBe('high')
     expect(tipsOf({ ...base, fill: fill(1000), lastTurn: null, weeklyToday: 5 })).toEqual([])
   })
+})
+
+describe('biggestOf', () => {
+  const bd = (servers: [string, number][], messages = 20_000) => ({
+    slices: [
+      { name: 'Messages', tokens: messages, kind: 'used' as const },
+      { name: 'System prompt', tokens: 5_000, kind: 'used' as const },
+    ],
+    deferred: 0,
+    mcpServers: servers.map(([name, tokens]) => ({ name, tokens })),
+    memoryFiles: [],
+    mcpToolServer: {},
+  })
+
+  test('an MCP server with no calls after three turns is not needed, and becomes a tip', async () => {
+    const b = biggestOf({ fill: fill(60_000), breakdown: bd([['playwright', 30_000]]), mcpCalls: {}, turns: 3 })
+    expect(b).toEqual({ kind: 'mcp', name: 'playwright', tokens: 30_000, share: 0.5, calls: 0, verdict: 'unused' })
+    const tips = tipsOf({ fill: fill(60_000), breakdown: bd([['playwright', 30_000]]), limits: null, lastTurn: null, weeklyToday: null, biggest: b, budget: DEFAULT_BUDGET, now: 0 })
+    expect(tips.map(t => t.text)).toEqual(["Biggest: playwright MCP 30.0k (50%), no calls this session: disable it if this task won't need it"])
+  })
+
+  test('a server that was called is needed, and gets no tip', async () => {
+    const b = biggestOf({ fill: fill(60_000), breakdown: bd([['playwright', 30_000]]), mcpCalls: { playwright: 2 }, turns: 5 })
+    expect(b?.verdict).toBe('needed')
+    expect(verdictText(b!, 5)).toBe('needed: 2 calls this session')
+  })
+
+  test('too early before three turns', async () => {
+    expect(biggestOf({ fill: fill(60_000), breakdown: bd([['playwright', 30_000]]), mcpCalls: {}, turns: 1 })?.verdict).toBe('too-early')
+  })
+
+  test('messages as the biggest are the conversation', async () => {
+    expect(biggestOf({ fill: fill(100_000), breakdown: bd([], 80_000), mcpCalls: {}, turns: 9 })?.verdict).toBe('conversation')
+  })
+
+  test('nothing under 10k or 15% of the used context', async () => {
+    expect(biggestOf({ fill: fill(200_000), breakdown: bd([['a', 25_000]], 20_000), mcpCalls: {}, turns: 9 })).toBe(null)
+    expect(biggestOf({ fill: fill(30_000), breakdown: bd([['a', 8_000]], 5_000), mcpCalls: {}, turns: 9 })).toBe(null)
+  })
+})
+
+test('serverOfTool credits calls by schema, else by the wire-name prefix', async () => {
+  const b = { slices: [], deferred: 0, mcpServers: [{ name: 'plugin:github:github', tokens: 1 }], memoryFiles: [], mcpToolServer: { mcp__x__y: 'linear' } }
+  expect(serverOfTool('mcp__x__y', b)).toBe('linear')
+  expect(serverOfTool('mcp__plugin_github_github__search', b)).toBe('plugin:github:github')
+  expect(serverOfTool('Bash', b)).toBe(null)
 })

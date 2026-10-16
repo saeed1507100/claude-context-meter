@@ -1,4 +1,4 @@
-import type { Breakdown, Fill, Limits, Tip } from '../types'
+import type { Biggest, Breakdown, Fill, Limits, Tip, Verdict } from '../types'
 
 import { fmt } from './model'
 
@@ -89,6 +89,59 @@ const clock = (t: number) => {
 }
 
 const MCP_HEAVY = 20_000
+const BIGGEST_MIN_TOKENS = 10_000
+const BIGGEST_MIN_SHARE = 0.15
+/** Turns an MCP server may sit unused before it is judged not needed. */
+export const UNUSED_AFTER_TURNS = 3
+
+const SYSTEM = ['System prompt', 'System tools']
+
+/**
+ * The single largest component of the used context, and whether this session needs it:
+ * an MCP server by its tool calls so far, the messages always (they are the conversation),
+ * the system prompt and tools never removable, memory files and skills not judgeable from calls.
+ * Null when nothing passes 10k tokens and 15% of the used context.
+ */
+export const biggestOf = (args: {
+  fill: Fill
+  breakdown: Breakdown
+  mcpCalls: Readonly<Record<string, number>>
+  turns: number
+}): Biggest | null => {
+  const { fill, breakdown, mcpCalls, turns } = args
+  const slice = (name: string) => breakdown.slices.find(s => s.kind === 'used' && s.name === name)?.tokens ?? 0
+  const candidates: Omit<Biggest, 'share'>[] = [
+    ...breakdown.mcpServers.map(s => {
+      const calls = mcpCalls[s.name] ?? 0
+      const verdict: Verdict = calls > 0 ? 'needed' : turns < UNUSED_AFTER_TURNS ? 'too-early' : 'unused'
+      return { kind: 'mcp' as const, name: s.name, tokens: s.tokens, calls, verdict }
+    }),
+    ...breakdown.memoryFiles.map(f => ({ kind: 'memory' as const, name: f.name, tokens: f.tokens, calls: 0, verdict: 'unknown' as const })),
+    { kind: 'messages', name: 'Messages', tokens: slice('Messages'), calls: 0, verdict: 'conversation' },
+    { kind: 'skills', name: 'Skills', tokens: slice('Skills'), calls: 0, verdict: 'unknown' },
+    ...SYSTEM.map(n => ({ kind: 'system' as const, name: n, tokens: slice(n), calls: 0, verdict: 'fixed' as const })),
+  ]
+  const top = candidates.reduce((a, b) => (b.tokens > a.tokens ? b : a))
+  const share = top.tokens / Math.max(fill.tokens, 1)
+  if (top.tokens < BIGGEST_MIN_TOKENS || share < BIGGEST_MIN_SHARE) return null
+  return { ...top, share }
+}
+
+const label = (b: Biggest) => (b.kind === 'mcp' ? `${b.name} MCP` : b.kind === 'memory' ? (b.name.split('/').pop() ?? b.name) : b.name)
+
+/** The verdict as one short phrase, for the pane. */
+export const verdictText = (b: Biggest, turns: number) =>
+  ({
+    needed: `needed: ${b.calls} call${b.calls === 1 ? '' : 's'} this session`,
+    unused: `not needed so far: no calls in ${turns} turns`,
+    'too-early': `too early to judge: ${turns} of ${UNUSED_AFTER_TURNS} turns`,
+    conversation: 'needed: this is the conversation; compact to shrink it',
+    fixed: 'needed: built in',
+    unknown: 'loaded every turn; check it fits this task',
+  })[b.verdict]
+
+/** The biggest component as `name 18.2k (31%)`. */
+export const biggestText = (b: Biggest) => `${label(b)} ${fmt(b.tokens)} (${Math.round(b.share * 100)}%)`
 const LARGE_CONTEXT = 100_000
 
 /**
@@ -101,10 +154,11 @@ export const tipsOf = (args: {
   limits: Limits | null
   lastTurn: number | null
   weeklyToday: number | null
+  biggest?: Biggest | null
   budget: Budget
   now: number
 }): Tip[] => {
-  const { fill, breakdown, limits, lastTurn, weeklyToday, budget, now } = args
+  const { fill, breakdown, limits, lastTurn, weeklyToday, biggest = null, budget, now } = args
   const tips: Tip[] = []
   const five = limits?.fiveHour ?? null
   const resets = limits?.fiveHourResetsAt ?? null
@@ -128,8 +182,12 @@ export const tipsOf = (args: {
   if (fill.tokens >= LARGE_CONTEXT) {
     tips.push({ tone: 'elevated', text: `Each turn re-reads ${fmt(fill.tokens)}: save and compact, or /clear for a new task` })
   }
+  const isBiggestUnused = biggest?.verdict === 'unused'
+  if (isBiggestUnused) {
+    tips.push({ tone: 'elevated', text: `Biggest: ${biggestText(biggest)}, no calls this session: disable it if this task won't need it` })
+  }
   const mcp = breakdown?.mcpServers.reduce((n, s) => n + s.tokens, 0) ?? 0
-  if (mcp >= MCP_HEAVY && breakdown !== null) {
+  if (mcp >= MCP_HEAVY && breakdown !== null && !isBiggestUnused) {
     const top = breakdown.mcpServers[0]!
     tips.push({ tone: 'elevated', text: `MCP tools hold ${fmt(mcp)} (${top.name} ${fmt(top.tokens)}): disable servers you are not using` })
   }
