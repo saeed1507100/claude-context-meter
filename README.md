@@ -19,6 +19,10 @@ Run this in a Claude Code terminal session:
 
 Answer `y` to add the marketplace, then pick a scope. Choose the user scope to have it in every session, desktop app included.
 
+## Live 5-hour limit
+
+Every minute the plugin asks Anthropic's usage endpoint for your account's 5-hour utilization, so usage from other sessions shows even while this one is idle. It sends the session's own login through Claude Code's credential handle, and the plugin never sees the token. If the request fails, as with an API key, a third-party provider or no network, it falls back to the figure from this session's last reply, and the pane marks it "as of last reply".
+
 ## Thresholds
 
 | Level | When | Meter |

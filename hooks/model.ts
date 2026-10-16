@@ -36,6 +36,19 @@ export const toBreakdown = (b: SessionContextBreakdown): Breakdown => {
 export const fiveHourOf = (limits: readonly SessionRateLimit[]) =>
   limits.find(l => l.kind === 'five_hour')?.percentUsed ?? null
 
+export const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
+export const POLL_MS = 60_000
+
+/** The account-wide 5-hour utilization from the usage endpoint's body, or null when it is not there. */
+export const parseFiveHour = (text: string): number | null => {
+  try {
+    const v = (JSON.parse(text) as { five_hour?: { utilization?: unknown } }).five_hour?.utilization
+    return typeof v === 'number' ? v : null
+  } catch {
+    return null
+  }
+}
+
 export const levelOf = (fill: Fill | null, fiveHour: number | null): Level => {
   if (fill === null) return 'ok'
   const isBusy = fiveHour !== null && fiveHour >= BUSY_FIVE_HOUR

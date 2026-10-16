@@ -7,7 +7,10 @@ import {
   SAVE_PROMPT,
   adviceOf,
   fiveHourOf,
+  POLL_MS,
+  USAGE_URL,
   fmt,
+  parseFiveHour,
   levelOf,
   meterSvg,
   partsOf,
@@ -22,9 +25,25 @@ const PANE = 'context-meter'
 const fill = atom({ plugin: 'context-meter', key: 'fill' } as const, null)
 const breakdown = atom({ plugin: 'context-meter', key: 'breakdown' } as const, null)
 const fiveHour = atom({ plugin: 'context-meter', key: 'fiveHour' } as const, null)
+const limitSource = atom({ plugin: 'context-meter', key: 'limitSource' } as const, null)
 const warnedLevel = atom({ plugin: 'context-meter', key: 'warnedLevel' } as const, 'ok')
 const isCompactPending = atom({ plugin: 'context-meter', key: 'isCompactPending' } as const, false)
 const isDismissed = atom({ plugin: 'context-meter', key: 'isDismissed' } as const, false)
+
+/** Reads the account-wide 5-hour window, so usage from other sessions shows while this one is idle. */
+const pollLimit = async ($: EngineInterface) => {
+  const auth = await $.session.authorize()
+  if (auth === null) return
+  try {
+    const r = await $.http.fetch(USAGE_URL, { auth: auth.handle, headers: { 'anthropic-beta': 'oauth-2025-04-20' } })
+    const v = r.ok ? parseFiveHour(r.text) : null
+    if (v === null) return
+    await update($, fiveHour, () => v)
+    await update($, limitSource, () => 'live')
+  } catch {
+    // Offline or refused: keep the last figure.
+  }
+}
 
 const RANK: Record<Level, number> = { ok: 0, elevated: 1, high: 2 }
 
@@ -42,9 +61,13 @@ const compact = ($: EngineInterface) => $.session.compact({ instructions: COMPAC
 const measure = async ($: EngineInterface) => {
   const usage = await $.session.usage({ breakdown: 'summary' })
   const f = toFill(usage.context)
-  const hourly = fiveHourOf(usage.rateLimits)
   await update($, fill, () => f)
-  await update($, fiveHour, () => hourly)
+  const live = (await read($, limitSource)) === 'live'
+  const hourly = live ? await read($, fiveHour) : fiveHourOf(usage.rateLimits)
+  if (!live) {
+    await update($, fiveHour, () => hourly)
+    await update($, limitSource, () => (hourly === null ? null : 'reply'))
+  }
   if (usage.context.breakdown) {
     const b = toBreakdown(usage.context.breakdown)
     await update($, breakdown, () => b)
@@ -66,6 +89,8 @@ export const register: Register = on => {
       description: 'Open the context breakdown pane',
     })
     await measure($)
+    void pollLimit($)
+    $.clock.every(POLL_MS, () => void pollLimit($))
     return next(e)
   })
 
@@ -144,6 +169,7 @@ export const register: Register = on => {
     const b = await read($, breakdown)
     const hourly = await read($, fiveHour)
     if (f === null || b === null) return <Text dimColor>Waiting for the first reply.</Text>
+    const source = await read($, limitSource)
 
     const level = levelOf(f, hourly)
     const advice = adviceOf(level, f, hourly)
@@ -155,7 +181,7 @@ export const register: Register = on => {
         <Box flexDirection="row" gap={1} alignItems="flex-end">
           <Text bold>{fmt(f.tokens)}</Text>
           <Text dimColor>
-            of {fmt(f.window)} · {f.percent}%{hourly === null ? '' : ` · 5h limit ${Math.round(hourly)}%`}
+            of {fmt(f.window)} · {f.percent}%{hourly === null ? '' : ` · 5h limit ${Math.round(hourly)}%${source === 'reply' ? ' (as of last reply)' : ''}`}
           </Text>
         </Box>
         {Svg !== undefined && (

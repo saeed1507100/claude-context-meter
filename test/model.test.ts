@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { adviceOf, fmt, levelOf, meterSvg, partsOf, textMeter, toBreakdown, toFill } from '../hooks/model'
+import { adviceOf, fmt, parseFiveHour, levelOf, meterSvg, partsOf, textMeter, toBreakdown, toFill } from '../hooks/model'
 
 const fill = (tokens: number, window = 1_000_000) => ({ tokens, window, percent: Math.round((tokens / window) * 100) })
 
@@ -78,4 +78,10 @@ test('the terminal meter sizes parts to the window', async () => {
   const cells = textMeter([{ name: 'Messages', tokens: 500, kind: 'used' }], 1000, 20)
   expect(cells[0]!.cells).toBe(10)
   expect(fmt(1_250_000)).toBe('1.3M')
+})
+
+test('parseFiveHour reads the account window and ignores anything else', async () => {
+  expect(parseFiveHour('{"five_hour":{"utilization":37.5,"resets_at":"x"},"seven_day":{"utilization":20}}')).toBe(37.5)
+  expect(parseFiveHour('{"seven_day":{"utilization":20}}')).toBe(null)
+  expect(parseFiveHour('<html>')).toBe(null)
 })

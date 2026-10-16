@@ -19,6 +19,7 @@ declare module 'claude-code' {
       fill: Fill | null
       breakdown: Breakdown | null
       fiveHour: number | null
+      limitSource: 'live' | 'reply' | null
       warnedLevel: Level
       isCompactPending: boolean
       isDismissed: boolean
