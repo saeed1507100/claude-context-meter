@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { EMPTY_NOTES, applyNotes, isEmpty, nextStep, notesPrompt } from '../hooks/notes'
+import { EMPTY_NOTES, applyNotes, isNotesTool, isEmpty, nextStep, notesPrompt } from '../hooks/notes'
 
 describe('applyNotes', () => {
   const started = applyNotes(EMPTY_NOTES, { goal: 'Ship 1.3.0', plan: ['Fix band', 'Write tests', 'Release'] }, 1)
@@ -25,4 +25,9 @@ describe('applyNotes', () => {
     expect(text).toContain('1. [x] Fix band')
     expect(text).toContain('2. [ ] Write tests')
   })
+})
+
+test('the tool is matched by its wire name', async () => {
+  expect(isNotesTool('mcp__context-meter__session_notes')).toBe(true)
+  expect(isNotesTool('mcp__other__session_notes')).toBe(false)
 })

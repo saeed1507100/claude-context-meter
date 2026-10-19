@@ -4,7 +4,7 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 import type { Level, Limits, Notes } from '../types'
 import { LARGE_CONTEXT, baselineFor, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
 import type { Budget } from './budget'
-import { CHECKPOINT_PROMPT, EMPTY_NOTES, NOTES_DESCRIPTION, NOTES_SCHEMA, NOTES_TOOL, applyNotes, isEmpty, nextStep, notesKey, notesPrompt } from './notes'
+import { CHECKPOINT_PROMPT, EMPTY_NOTES, NOTES_DESCRIPTION, NOTES_SCHEMA, NOTES_TOOL, applyNotes, isEmpty, isNotesTool, nextStep, notesKey, notesPrompt } from './notes'
 import type { NotesInput } from './notes'
 import {
   POLL_MS,
@@ -164,7 +164,7 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
-    if ((e.tool as string) === NOTES_TOOL) {
+    if (isNotesTool(e.tool)) {
       const step = nextStep(await saveNotes($, e as unknown as NotesInput))
       return { result: step === null ? 'Saved.' : `Saved. Next: ${step}` }
     }

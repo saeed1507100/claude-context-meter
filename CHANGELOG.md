@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Fix `session_notes` calls failing: the hook now matches the tool's wire name.
+
 ## 0.5.0
 
 - Suggest compacting only past 250k tokens; 110k no longer raises a toast.

@@ -2,6 +2,9 @@ import type { Notes } from '../types'
 
 export const NOTES_TOOL = 'session_notes'
 
+/** A registered tool reaches tool.call under its wire name, `mcp__<plugin>__<name>`. */
+export const isNotesTool = (tool: string) => tool === NOTES_TOOL || tool === `mcp__context-meter__${NOTES_TOOL}`
+
 export const EMPTY_NOTES: Notes = { goal: null, plan: [], decisions: [], updatedAt: 0 }
 
 const MAX_DECISIONS = 12
