@@ -1,11 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Level, Limits, Notes } from '../types'
-import { LARGE_CONTEXT, baselinesFor, freshTips, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
+import type { Level, Limits } from '../types'
+import { baselinesFor, freshTips, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
 import type { Budget } from './budget'
-import { CHECKPOINT_PROMPT, EMPTY_NOTES, NOTES_DESCRIPTION, NOTES_SCHEMA, NOTES_TOOL, applyNotes, isEmpty, isNotesTool, nextStep, notesKey, notesPrompt } from './notes'
-import type { NotesInput } from './notes'
 import {
   POLL_MS,
   USAGE_URL,
@@ -37,11 +35,10 @@ const turnStartFiveHour = atom({ plugin: 'context-meter', key: 'turnStartFiveHou
 const lastTurn = atom({ plugin: 'context-meter', key: 'lastTurn' } as const, null)
 const weeklyToday = atom({ plugin: 'context-meter', key: 'weeklyToday' } as const, null)
 const warnedTips = atom({ plugin: 'context-meter', key: 'warnedTips' } as const, [])
-const notes = atom({ plugin: 'context-meter', key: 'notes' } as const, null)
 const openSections = atom({ plugin: 'context-meter', key: 'openSections' } as const, {})
 
-type Section = 'notes' | 'breakdown' | 'limits' | 'tools'
-const DEFAULT_OPEN: Record<Section, boolean> = { notes: true, breakdown: false, limits: true, tools: false }
+type Section = 'breakdown' | 'limits' | 'tools'
+const DEFAULT_OPEN: Record<Section, boolean> = { breakdown: false, limits: true, tools: false }
 const isDismissed = atom({ plugin: 'context-meter', key: 'isDismissed' } as const, false)
 const mcpCalls = atom({ plugin: 'context-meter', key: 'mcpCalls' } as const, {})
 const turns = atom({ plugin: 'context-meter', key: 'turns' } as const, 0)
@@ -73,19 +70,9 @@ const pollLimits = async ($: EngineInterface) => {
 
 const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'Context & limits' })
 
-const checkpoint = ($: EngineInterface) => $.prompt.submit({ text: CHECKPOINT_PROMPT, asUser: true })
-
-/** Loads this project's notes from the plugin store into session state. */
-const loadNotes = async ($: EngineInterface) => {
-  const stored = (await $.store.get(notesKey(await $.session.root()))) as Notes | undefined
-  await update($, notes, () => stored ?? null)
-}
-
-const saveNotes = async ($: EngineInterface, input: NotesInput) => {
-  const next = applyNotes((await read($, notes)) ?? EMPTY_NOTES, input, await $.clock.now())
-  await $.store.set(notesKey(await $.session.root()), next)
-  await update($, notes, () => next)
-  return next
+/** Removes notes saved by 0.5–0.6, which carried one project's plan into others. */
+const dropNotes = async ($: EngineInterface) => {
+  for (const key of await $.store.keys()) if (key.startsWith('notes:')) await $.store.delete(key)
 }
 
 /** Everything a drawing or a toast judges by, read in one place. */
@@ -142,13 +129,11 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'context-meter', description: 'Open the context and usage-limit pane' })
-    await $.tool.register({ name: NOTES_TOOL, description: NOTES_DESCRIPTION, inputSchema: NOTES_SCHEMA })
-    await loadNotes($)
+    await dropNotes($)
     await measure($, budget)
     void pollLimits($)
     poller?.cancel()
-    // Notes are shared by every session in the project, so another session's change shows within a minute.
-    poller = $.clock.every(POLL_MS, () => void Promise.all([pollLimits($), loadNotes($)]))
+    poller = $.clock.every(POLL_MS, () => void pollLimits($))
     return next(e)
   })
 
@@ -172,20 +157,7 @@ export const register: Register = (on, options) => {
     return { text: 'Context pane opened.' }
   })
 
-  on('tool.describe', { tool: NOTES_TOOL }, async ($, e, next) => ({ ...(await next(e)), isDeferred: false }))
-
-  on('prompt.compose', async ($, e, next) => {
-    const result = await next(e)
-    const n = await read($, notes)
-    if (n === null || isEmpty(n)) return result
-    return { sections: [...result.sections, { id: 'context-meter:notes', text: notesPrompt(n), scope: 'session' as const }] }
-  })
-
   on('tool.call', async ($, e, next) => {
-    if (isNotesTool(e.tool)) {
-      const step = nextStep(await saveNotes($, e as unknown as NotesInput))
-      return { result: step === null ? 'Saved.' : `Saved. Next: ${step}` }
-    }
     const result = await next(e)
     // Counting is a side note; it must never fail the tool call.
     try {
@@ -197,7 +169,7 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     // Only a live reading at both ends gives a turn's cost; a cached one would be stale.
-    const [l] = await Promise.all([pollLimits($), loadNotes($)])
+    const l = await pollLimits($)
     await update($, turnStartFiveHour, () => l?.fiveHour ?? null)
     return next(e)
   })
@@ -267,8 +239,7 @@ export const register: Register = (on, options) => {
             <Text>⚠️</Text>
             <Text dimColor>{tip.text}</Text>
             <Box flexGrow={1} />
-            {f.tokens >= LARGE_CONTEXT && <Button key="checkpoint" label="Checkpoint" variant="primary" onPress={() => checkpoint($)} />}
-            <Button key="dismiss" label="Later" plain onPress={() => update($, isDismissed, () => true)} />
+            <Button key="dismiss" label="Dismiss" plain onPress={() => update($, isDismissed, () => true)} />
           </Box>
         )}
         {below}
@@ -282,13 +253,10 @@ export const register: Register = (on, options) => {
     const Svg = 'Svg' in ui ? ui.Svg : undefined
     const { f, b, l, turn, today, tips, biggest, turnCount } = await snapshot($, budget)
     if (f === null || b === null) return <Text dimColor>Waiting for the first reply.</Text>
-    const n = await read($, notes)
     const calls = await read($, mcpCalls)
     const open = { ...DEFAULT_OPEN, ...(await read($, openSections)) }
     const source = await read($, limitSource)
     const parts = partsOf(b.slices)
-    const hasNotes = n !== null && !isEmpty(n)
-    const step = n === null ? null : nextStep(n)
     const toggle = (id: Section) => () => update($, openSections, o => ({ ...DEFAULT_OPEN, ...o, [id]: !open[id] }))
 
     const row = (label: string, value: string, swatchSlot?: number) => (
@@ -329,24 +297,6 @@ export const register: Register = (on, options) => {
             ))}
           </Box>
         )}
-        {section('notes', 'Session notes', hasNotes ? (step === null ? 'plan done' : `next: ${step}`) : 'none yet', () =>
-          !hasNotes ? (
-            <Text dimColor>Claude records the plan and decisions as it works.</Text>
-          ) : (
-            <Box flexDirection="column">
-              {n!.goal !== null && <Text bold>{n!.goal}</Text>}
-              {n!.plan.map((s, i) => (
-                <Text key={`step-${i}`} dimColor={s.done}>
-                  {s.done ? '✓' : s.text === step ? '▸' : '○'} {s.text}
-                </Text>
-              ))}
-              {n!.decisions.length > 0 && <Text dimColor>Decisions</Text>}
-              {n!.decisions.slice(-3).map((d, i) => (
-                <Text key={`dec-${i}`}>• {d}</Text>
-              ))}
-            </Box>
-          ),
-        )}
         {section('breakdown', 'What fills the context', biggest === null ? `${parts.length} groups` : `biggest: ${biggestText(biggest)}`, () => (
           <Box flexDirection="column">
             {parts.map(p => row(p.name, fmt(p.tokens), p.slot))}
@@ -368,11 +318,8 @@ export const register: Register = (on, options) => {
             <Box flexDirection="column">{b.mcpServers.slice(0, 8).map(g => row(g.label ?? serverLabel(g.name), `${callsText(calls[g.name] ?? 0)} · ${fmt(g.tokens)}`))}</Box>
           ))}
         <Box flexDirection="row" gap={1}>
-          <Button key="checkpoint" label="Checkpoint" variant="primary" hotkey="s" onPress={() => checkpoint($)} />
-          {hasNotes && <Button key="clear" label="Clear notes" hotkey="x" plain onPress={() => saveNotes($, { clear: true })} />}
           <Button key="refresh" label="Refresh" hotkey="r" plain onPress={() => Promise.all([measure($, budget), pollLimits($)])} />
         </Box>
-        <Text dimColor>Checkpoint updates the notes; then run /compact.</Text>
       </Box>
     )
   })

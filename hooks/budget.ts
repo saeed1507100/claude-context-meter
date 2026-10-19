@@ -151,23 +151,20 @@ export const verdictText = (b: Biggest, turns: number) =>
     needed: `needed: ${b.calls} call${b.calls === 1 ? '' : 's'} this session`,
     unused: `not needed so far: no calls in ${turns} turns`,
     'too-early': `too early to judge: ${turns} of ${UNUSED_AFTER_TURNS} turns`,
-    conversation: 'needed: this is the conversation; compact to shrink it',
+    conversation: 'needed: this is the conversation',
     fixed: 'needed: built in',
-    unknown: 'loaded every turn; check it fits this task',
+    unknown: 'loaded every turn',
   })[b.verdict]
 
 /** The biggest component as `name 18.2k (31%)`. */
 export const biggestText = (b: Biggest) => `${label(b)} ${fmt(b.tokens)} (${Math.round(b.share * 100)}%)`
-/** Where compacting starts to pay for itself; below it a summary loses more than it saves. */
+/** Where a context is large enough that re-reading it each turn is worth a warning. */
 export const LARGE_CONTEXT = 250_000
 
-/**
- * What to do about the spend, most useful first. Compacting is one answer of
- * several: a heavy turn on a small context is the model or the task, not the context.
- */
 /** Tips not toasted yet, by kind; a kind that has gone away may toast again when it returns. */
 export const freshTips = (tips: readonly Tip[], warned: readonly string[]) => tips.filter(t => !warned.includes(t.id))
 
+/** What is driving the spend, most pressing first; each tip states a fact and suggests nothing. */
 export const tipsOf = (args: {
   fill: Fill
   breakdown: Breakdown | null
@@ -187,7 +184,7 @@ export const tipsOf = (args: {
     const left = hoursLeftAtPace(five, resets, now)!
     tips.push({ id: 'pace',
       tone: 'high',
-      text: `At this pace your 5-hour limit runs out around ${clock(now + left * 3_600_000)}. Lighter asks or Sonnet will stretch it`,
+      text: `At this pace, your 5-hour limit runs out around ${clock(now + left * 3_600_000)}`,
     })
   }
   if (lastTurn !== null && lastTurn >= budget.turnAlertPercent) {
@@ -195,26 +192,26 @@ export const tipsOf = (args: {
       tone: lastTurn >= budget.turnAlertPercent * 2 ? 'high' : 'elevated',
       text:
         fill.tokens >= LARGE_CONTEXT
-          ? `That turn cost ${lastTurn.toFixed(1)}% of your 5-hour limit, mostly from re-reading ${fmt(fill.tokens)} of context`
-          : `That turn cost ${lastTurn.toFixed(1)}% of your 5-hour limit. Sonnet, lower effort or a narrower ask would cost less`,
+          ? `The last turn used ${lastTurn.toFixed(1)}% of your 5-hour limit, mostly re-reading ${fmt(fill.tokens)} of context`
+          : `The last turn used ${lastTurn.toFixed(1)}% of your 5-hour limit`,
     })
   }
   if (fill.tokens >= LARGE_CONTEXT) {
-    tips.push({ id: 'context', tone: 'elevated', text: `Context is at ${fmt(fill.tokens)} and every turn re-reads it. Checkpoint, then run /compact, or /clear for a new task` })
+    tips.push({ id: 'context', tone: 'elevated', text: `Context is at ${fmt(fill.tokens)}, and every turn re-reads all of it` })
   }
   const isBiggestUnused = biggest?.verdict === 'unused'
   if (isBiggestUnused) {
-    tips.push({ id: 'biggest', tone: 'elevated', text: `${biggestText(biggest)} is the biggest part of context, and this session hasn't used it. Disable it if this task won't` })
+    tips.push({ id: 'biggest', tone: 'elevated', text: `${biggestText(biggest)} is the biggest part of context, and this session hasn't used it` })
   }
   const mcp = breakdown?.mcpServers.reduce((n, s) => n + s.tokens, 0) ?? 0
   if (mcp >= MCP_HEAVY && breakdown !== null && !isBiggestUnused) {
     const top = breakdown.mcpServers[0]!
-    tips.push({ id: 'mcp', tone: 'elevated', text: `Tool schemas take ${fmt(mcp)}, ${top.label ?? serverLabel(top.name)} the most at ${fmt(top.tokens)}. Disable the ones you don't need` })
+    tips.push({ id: 'mcp', tone: 'elevated', text: `Tool schemas take ${fmt(mcp)} of context, ${top.label ?? serverLabel(top.name)} the most at ${fmt(top.tokens)}` })
   }
   if (weeklyToday !== null && weeklyToday >= budget.dailyWeeklyPercent * 0.8) {
     tips.push({ id: 'weekly',
       tone: weeklyToday >= budget.dailyWeeklyPercent ? 'high' : 'elevated',
-      text: `You've used ${weeklyToday.toFixed(0)}% of your weekly limit today. A lighter pace keeps the rest of the week open`,
+      text: `You've used ${weeklyToday.toFixed(0)}% of your weekly limit today`,
     })
   }
   return tips

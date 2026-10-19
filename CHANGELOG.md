@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- Remove session notes, the `session_notes` tool and the Checkpoint button; notes saved by earlier versions are deleted on start.
+- Make every tip a plain statement, with no suggested action.
+
 ## 0.6.6
 
 - Fix "Used today": keep the day's starting point per weekly window, so a session on another account can't reset it, and start a new day from the last reading.
