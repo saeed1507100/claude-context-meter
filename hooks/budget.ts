@@ -73,14 +73,30 @@ export const dayKey = (now: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export type DayBaseline = { day: string; weekly: number }
+/** Where one weekly window stood at the start of a day, and the latest reading of it. */
+export type WindowBaseline = { day: string; weekly: number; last: number; resetsAt: number }
 
-/** Today's baseline: kept while it is today's and the week has not reset below it, else started from now. */
-export const baselineFor = (stored: unknown, weekly: number, now: number): DayBaseline => {
+const WEEK_MS = 7 * 24 * HOUR
+
+/**
+ * Today's starting point for each weekly window, keyed by its reset hour, so two
+ * accounts (each with its own reset) never share one. A new day starts from the
+ * window's last reading; a window seen first today starts from now.
+ */
+export const baselinesFor = (
+  stored: unknown,
+  weekly: number,
+  resetsAt: number | null,
+  now: number,
+): { baselines: Record<string, WindowBaseline>; today: number } => {
   const day = dayKey(now)
-  const s = stored as Partial<DayBaseline> | undefined
-  if (s?.day === day && typeof s.weekly === 'number' && s.weekly <= weekly) return { day, weekly: s.weekly }
-  return { day, weekly }
+  const key = resetsAt === null ? 'unknown' : String(Math.round(resetsAt / HOUR))
+  const all = typeof stored === 'object' && stored !== null ? (stored as Record<string, WindowBaseline>) : {}
+  const prev = all[key]
+  const start =
+    prev === undefined || prev.last > weekly ? weekly : prev.day === day ? Math.min(prev.weekly, weekly) : prev.last
+  const kept = Object.fromEntries(Object.entries(all).filter(([, b]) => b.resetsAt === 0 || b.resetsAt > now - WEEK_MS))
+  return { baselines: { ...kept, [key]: { day, weekly: start, last: weekly, resetsAt: resetsAt ?? 0 } }, today: weekly - start }
 }
 
 const clock = (t: number) => {

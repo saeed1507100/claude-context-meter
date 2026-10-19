@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.6
+
+- Fix "Used today": keep the day's starting point per weekly window, so a session on another account can't reset it, and start a new day from the last reading.
+
 ## 0.6.5
 
 - Show each tool server's calls this session, or "unused", in the Tool servers section.

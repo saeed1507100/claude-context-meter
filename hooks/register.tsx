@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { Level, Limits, Notes } from '../types'
-import { LARGE_CONTEXT, baselineFor, freshTips, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
+import { LARGE_CONTEXT, baselinesFor, freshTips, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
 import type { Budget } from './budget'
 import { CHECKPOINT_PROMPT, EMPTY_NOTES, NOTES_DESCRIPTION, NOTES_SCHEMA, NOTES_TOOL, applyNotes, isEmpty, isNotesTool, nextStep, notesKey, notesPrompt } from './notes'
 import type { NotesInput } from './notes'
@@ -25,7 +25,7 @@ import {
 } from './model'
 
 const PANE = 'context-meter'
-const BASELINE_KEY = 'weeklyBaseline'
+const BASELINE_KEY = 'weeklyBaselines'
 
 let poller: Timer | null = null
 
@@ -51,9 +51,9 @@ const setLimits = async ($: EngineInterface, l: Limits, source: 'live' | 'reply'
   await update($, limits, () => l)
   await update($, limitSource, () => source)
   if (l.weekly === null) return
-  const base = baselineFor(await $.store.get(BASELINE_KEY), l.weekly, await $.clock.now())
-  await $.store.set(BASELINE_KEY, base)
-  await update($, weeklyToday, () => l.weekly! - base.weekly)
+  const { baselines, today } = baselinesFor(await $.store.get(BASELINE_KEY), l.weekly, l.weeklyResetsAt, await $.clock.now())
+  await $.store.set(BASELINE_KEY, baselines)
+  await update($, weeklyToday, () => today)
 }
 
 /** Reads the account-wide windows, so usage from other sessions shows while this one is idle. */

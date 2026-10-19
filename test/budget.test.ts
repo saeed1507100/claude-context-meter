@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { serverOfTool } from '../hooks/model'
-import { DEFAULT_BUDGET, baselineFor, freshTips, biggestOf, budgetOf, dayKey, hoursLeftAtPace, isPaceHigh, parseLimits, tipsOf, verdictText } from '../hooks/budget'
+import { DEFAULT_BUDGET, baselinesFor, freshTips, biggestOf, budgetOf, dayKey, hoursLeftAtPace, isPaceHigh, parseLimits, tipsOf, verdictText } from '../hooks/budget'
 
 const H = 3_600_000
 const fill = (tokens: number) => ({ tokens, window: 1_000_000, percent: Math.round(tokens / 10_000) })
@@ -32,11 +32,24 @@ describe('pace', () => {
   })
 })
 
-test('the weekly baseline holds for the day and restarts on a new day or a reset', async () => {
-  const now = Date.parse('2026-10-16T10:00:00')
-  expect(baselineFor({ day: dayKey(now), weekly: 30 }, 42, now)).toEqual({ day: dayKey(now), weekly: 30 })
-  expect(baselineFor({ day: '2026-10-15', weekly: 30 }, 42, now)).toEqual({ day: dayKey(now), weekly: 42 })
-  expect(baselineFor({ day: dayKey(now), weekly: 30 }, 3, now)).toEqual({ day: dayKey(now), weekly: 3 })
+test('the weekly baseline is kept per window, so another account never resets it', async () => {
+  const now = Date.parse('2026-10-19T10:00:00')
+  const mine = Date.parse('2026-10-21T23:00:00')
+  const other = Date.parse('2026-10-24T05:00:00')
+  const yesterday = { [String(Math.round(mine / H))]: { day: '2026-10-18', weekly: 30, last: 44, resetsAt: mine } }
+  const first = baselinesFor(yesterday, 50, mine, now)
+  expect(first.today).toBe(6)
+  const withOther = baselinesFor(first.baselines, 4, other, now)
+  expect(withOther.today).toBe(0)
+  expect(baselinesFor(withOther.baselines, 57, mine, now).today).toBe(13)
+})
+
+test('a window seen first today starts from now, and a reset starts it again', async () => {
+  const now = Date.parse('2026-10-19T10:00:00')
+  const r = Date.parse('2026-10-21T23:00:00')
+  expect(baselinesFor(undefined, 44, r, now).today).toBe(0)
+  const before = baselinesFor(undefined, 44, r, now).baselines
+  expect(baselinesFor(before, 2, r, now).today).toBe(0)
 })
 
 test('budgetOf drops values out of range', async () => {
