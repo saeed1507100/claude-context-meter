@@ -240,6 +240,7 @@ export const register: Register = (on, options) => {
           {textMeter(b.slices, f.window, 20).map(m => (
             <Text color={swatch(m.p.slot)}>{'━'.repeat(m.cells)}</Text>
           ))}
+          <Text dimColor>{'─'.repeat(Math.max(0, 20 - textMeter(b.slices, f.window, 20).reduce((n, m) => n + m.cells, 0)))}</Text>
         </Text>
       )
 
@@ -356,7 +357,7 @@ export const register: Register = (on, options) => {
           </Box>
         ))}
         {b.mcpServers.length > 0 &&
-          section('tools', 'Tool servers', fmt(b.mcpServers.reduce((t, g) => t + g.tokens, 0)), () => (
+          section('tools', 'Tool servers', `${fmt(b.mcpServers.reduce((t, g) => t + g.tokens, 0))} tokens · ${b.mcpServers.length} servers`, () => (
             <Box flexDirection="column">{b.mcpServers.slice(0, 8).map(g => row(g.label ?? serverLabel(g.name), fmt(g.tokens)))}</Box>
           ))}
         <Box flexDirection="row" gap={1}>

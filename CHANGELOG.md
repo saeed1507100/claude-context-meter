@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.4
+
+- Draw the terminal bar's free space, so a small context still shows a full-width bar.
+- Label the Tool servers summary with tokens and server count.
+
 ## 0.6.3
 
 - Reload session notes at each turn and every minute, so changes from another session in the project show up.
