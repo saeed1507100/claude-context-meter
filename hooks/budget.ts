@@ -1,6 +1,6 @@
 import type { Biggest, Breakdown, Fill, Limits, Tip, Verdict } from '../types'
 
-import { fmt } from './model'
+import { fmt, serverLabel } from './model'
 
 const HOUR = 3_600_000
 const WINDOW_MS = 5 * HOUR
@@ -190,7 +190,7 @@ export const tipsOf = (args: {
   const mcp = breakdown?.mcpServers.reduce((n, s) => n + s.tokens, 0) ?? 0
   if (mcp >= MCP_HEAVY && breakdown !== null && !isBiggestUnused) {
     const top = breakdown.mcpServers[0]!
-    tips.push({ tone: 'elevated', text: `Tool schemas take ${fmt(mcp)}, ${top.label ?? top.name} the most at ${fmt(top.tokens)}. Disable the ones you don't need` })
+    tips.push({ tone: 'elevated', text: `Tool schemas take ${fmt(mcp)}, ${top.label ?? serverLabel(top.name)} the most at ${fmt(top.tokens)}. Disable the ones you don't need` })
   }
   if (weeklyToday !== null && weeklyToday >= budget.dailyWeeklyPercent * 0.8) {
     tips.push({

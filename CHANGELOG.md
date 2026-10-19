@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- Restructure the pane: tips first, then sections you can expand and collapse (notes, context, limits, tool servers).
+- Line up labels and values in any font, and hide empty rows.
+- Name the desktop app's built-in servers by what they do, such as "Task list (Claude app)".
+
 ## 0.5.1
 
 - Fix `session_notes` calls failing: the hook now matches the tool's wire name.

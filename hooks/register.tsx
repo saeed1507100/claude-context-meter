@@ -15,6 +15,7 @@ import {
   meterSvg,
   partsOf,
   rankOf,
+  serverLabel,
   serverOfTool,
   swatch,
   textMeter,
@@ -37,6 +38,10 @@ const lastTurn = atom({ plugin: 'context-meter', key: 'lastTurn' } as const, nul
 const weeklyToday = atom({ plugin: 'context-meter', key: 'weeklyToday' } as const, null)
 const warnedLevel = atom({ plugin: 'context-meter', key: 'warnedLevel' } as const, 'ok')
 const notes = atom({ plugin: 'context-meter', key: 'notes' } as const, null)
+const openSections = atom({ plugin: 'context-meter', key: 'openSections' } as const, {})
+
+type Section = 'notes' | 'breakdown' | 'limits' | 'tools'
+const DEFAULT_OPEN: Record<Section, boolean> = { notes: true, breakdown: false, limits: true, tools: false }
 const isDismissed = atom({ plugin: 'context-meter', key: 'isDismissed' } as const, false)
 const mcpCalls = atom({ plugin: 'context-meter', key: 'mcpCalls' } as const, {})
 const turns = atom({ plugin: 'context-meter', key: 'turns' } as const, 0)
@@ -262,109 +267,97 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = ui
     const Svg = 'Svg' in ui ? ui.Svg : undefined
     const { f, b, l, turn, today, tips, biggest, turnCount } = await snapshot($, budget)
-    const n = await read($, notes)
     if (f === null || b === null) return <Text dimColor>Waiting for the first reply.</Text>
+    const n = await read($, notes)
+    const open = { ...DEFAULT_OPEN, ...(await read($, openSections)) }
     const source = await read($, limitSource)
     const parts = partsOf(b.slices)
-    const col = (s: string, n: number) => s.slice(0, n).padEnd(n)
-    const row = (label: string, value: string, note = '') => (
-      <Text>
-        {col(label, 18)}
-        <Text bold>{value.padStart(7)}</Text>
-        <Text dimColor> {note}</Text>
-      </Text>
+    const hasNotes = n !== null && !isEmpty(n)
+    const step = n === null ? null : nextStep(n)
+    const toggle = (id: Section) => () => update($, openSections, o => ({ ...DEFAULT_OPEN, ...o, [id]: !open[id] }))
+
+    const row = (label: string, value: string, swatchSlot?: number) => (
+      <Box key={label} flexDirection="row" gap={1}>
+        {swatchSlot !== undefined && <Text color={swatch(swatchSlot)}>■</Text>}
+        <Text>{label}</Text>
+        <Box flexGrow={1} />
+        <Text bold>{value}</Text>
+      </Box>
+    )
+    const section = (id: Section, title: string, summary: string, body: () => unknown) => (
+      <Box key={id} flexDirection="column" gap={0}>
+        <Box flexDirection="row" alignItems="center" gap={1}>
+          <Button key={`toggle-${id}`} label={`${open[id] ? '▾' : '▸'} ${title}`} plain onPress={toggle(id)} />
+          <Box flexGrow={1} />
+          <Text dimColor>{summary}</Text>
+        </Box>
+        {open[id] && <Box flexDirection="column" paddingLeft={2}>{body() as never}</Box>}
+      </Box>
     )
 
     return (
       <Box flexDirection="column" gap={1}>
-        <Box flexDirection="row" gap={1} alignItems="flex-end">
-          <Text bold>{fmt(f.tokens)}</Text>
-          <Text dimColor>
-            of {fmt(f.window)} · {f.percent}%
-          </Text>
-        </Box>
-        {Svg !== undefined && (
-          <Svg source={meterSvg(b.slices, f.window, 320, 10)} alt="Context window by group" width={320} height={10} isInteractive />
-        )}
         <Box flexDirection="column">
-          {parts.map(p => (
-            <Text>
-              <Text color={swatch(p.slot)}>■ </Text>
-              {col(p.name, 18)}
-              <Text dimColor>{fmt(p.tokens).padStart(7)}</Text>
-            </Text>
-          ))}
-          <Text dimColor>
-            {'  '}
-            {col('Deferred tools', 18)}
-            {fmt(b.deferred).padStart(7)} (not in window)
-          </Text>
-        </Box>
-        {biggest !== null && (
-          <Box flexDirection="column">
-            <Text dimColor>Biggest component</Text>
-            <Text>
-              {'  '}
-              {biggestText(biggest)}
-              <Text dimColor> · {verdictText(biggest, turnCount)}</Text>
-            </Text>
+          <Box flexDirection="row" gap={1} alignItems="flex-end">
+            <Text bold>{fmt(f.tokens)}</Text>
+            <Text dimColor>of {fmt(f.window)} · {f.percent}%</Text>
           </Box>
-        )}
-        <Box flexDirection="column">
-          <Text dimColor>Usage limits{source === 'reply' ? ' (as of last reply)' : ''}</Text>
-          {row('5-hour window', pctText(l?.fiveHour ?? null))}
-          {row('Last turn', turn === null ? '–' : `+${turn.toFixed(1)}%`, 'includes other sessions running now')}
-          {row('Weekly', pctText(l?.weekly ?? null))}
-          {row('Weekly, today', pctText(today))}
-        </Box>
-        {b.mcpServers.length > 0 && (
-          <Box flexDirection="column">
-            <Text dimColor>MCP servers & claude.ai connectors</Text>
-            {b.mcpServers.slice(0, 5).map(g => (
-              <Text>
-                {'  '}
-                {col(g.label ?? g.name, 30)}
-                <Text dimColor>{fmt(g.tokens).padStart(7)}</Text>
-              </Text>
-            ))}
-          </Box>
-        )}
-        <Box flexDirection="column">
-          <Text dimColor>Session notes · kept outside the repo, restored after /compact</Text>
-          {n === null || isEmpty(n) ? (
-            <Text dimColor>{'  '}None yet. Claude records the plan and decisions as it works.</Text>
-          ) : (
-            <Box flexDirection="column">
-              {n.goal !== null && <Text>{'  '}{n.goal}</Text>}
-              {n.plan.map(s => (
-                <Text dimColor={s.done}>
-                  {'  '}
-                  {s.done ? '✓ ' : s.text === nextStep(n) ? '▸ ' : '○ '}
-                  {s.text}
-                </Text>
-              ))}
-              {n.decisions.slice(-3).map(d => (
-                <Text dimColor>{'  '}• {d}</Text>
-              ))}
-            </Box>
-          )}
+          {Svg !== undefined && <Svg source={meterSvg(b.slices, f.window, 320, 10)} alt="Context window by group" width={320} height={10} isInteractive />}
         </Box>
         {tips.length > 0 && (
           <Box flexDirection="column">
             {tips.map(t => (
               <Text>
                 <Text color={t.tone === 'high' ? 'error' : 'warning'}>▲ </Text>
-                <Text dimColor>{t.text}</Text>
+                {t.text}
               </Text>
             ))}
           </Box>
         )}
+        {section('notes', 'Session notes', hasNotes ? (step === null ? 'plan done' : `next: ${step}`) : 'none yet', () =>
+          !hasNotes ? (
+            <Text dimColor>Claude records the plan and decisions as it works.</Text>
+          ) : (
+            <Box flexDirection="column">
+              {n!.goal !== null && <Text bold>{n!.goal}</Text>}
+              {n!.plan.map((s, i) => (
+                <Text key={`step-${i}`} dimColor={s.done}>
+                  {s.done ? '✓' : s.text === step ? '▸' : '○'} {s.text}
+                </Text>
+              ))}
+              {n!.decisions.length > 0 && <Text dimColor>Decisions</Text>}
+              {n!.decisions.slice(-3).map((d, i) => (
+                <Text key={`dec-${i}`}>• {d}</Text>
+              ))}
+            </Box>
+          ),
+        )}
+        {section('breakdown', 'What fills the context', biggest === null ? `${parts.length} groups` : `biggest: ${biggestText(biggest)}`, () => (
+          <Box flexDirection="column">
+            {parts.map(p => row(p.name, fmt(p.tokens), p.slot))}
+            {row('Deferred tools (not loaded)', fmt(b.deferred))}
+            {biggest !== null && <Text dimColor>Biggest: {biggestText(biggest)}, {verdictText(biggest, turnCount)}</Text>}
+          </Box>
+        ))}
+        {section('limits', 'Usage limits', `5h ${pctText(l?.fiveHour ?? null)} · week ${pctText(l?.weekly ?? null)}`, () => (
+          <Box flexDirection="column">
+            {row('5-hour window', pctText(l?.fiveHour ?? null))}
+            {row('This week', pctText(l?.weekly ?? null))}
+            {row('Used today', pctText(today))}
+            {turn !== null && row('Last turn', `+${turn.toFixed(1)}%`)}
+            {source === 'reply' && <Text dimColor>As of the last reply.</Text>}
+          </Box>
+        ))}
+        {b.mcpServers.length > 0 &&
+          section('tools', 'Tool servers', fmt(b.mcpServers.reduce((t, g) => t + g.tokens, 0)), () => (
+            <Box flexDirection="column">{b.mcpServers.slice(0, 8).map(g => row(g.label ?? serverLabel(g.name), fmt(g.tokens)))}</Box>
+          ))}
         <Box flexDirection="row" gap={1}>
           <Button key="checkpoint" label="Checkpoint" variant="primary" hotkey="s" onPress={() => checkpoint($)} />
-          {n !== null && !isEmpty(n) && <Button key="clear" label="Clear notes" hotkey="x" plain onPress={() => saveNotes($, { clear: true })} />}
+          {hasNotes && <Button key="clear" label="Clear notes" hotkey="x" plain onPress={() => saveNotes($, { clear: true })} />}
           <Button key="refresh" label="Refresh" hotkey="r" plain onPress={() => Promise.all([measure($, budget), pollLimits($)])} />
         </Box>
-        <Text dimColor>After a checkpoint, run /compact. Your notes come back in the next context.</Text>
+        <Text dimColor>Checkpoint updates the notes; then run /compact.</Text>
       </Box>
     )
   })

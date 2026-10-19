@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { fmt, levelOf, limitsOfReply, meterSvg, partsOf, textMeter, labelOfServer, toBreakdown, toFill } from '../hooks/model'
+import { serverLabel, fmt, levelOf, limitsOfReply, meterSvg, partsOf, textMeter, labelOfServer, toBreakdown, toFill } from '../hooks/model'
 
 const fill = (tokens: number, window = 1_000_000) => ({ tokens, window, percent: Math.round((tokens / window) * 100) })
 
@@ -97,4 +97,11 @@ test('a connector listed by id is named after the product its tools mention', as
     memoryFiles: [],
   } as never)
   expect(b.mcpServers).toEqual([{ name: id, tokens: 50, label: 'Notion (claude.ai connector)' }])
+})
+
+test('desktop app servers get readable names', async () => {
+  expect(serverLabel('ccd_turn')).toBe('Task list (Claude app)')
+  expect(serverLabel('Claude_Code_iOS_Simulator')).toBe('iOS Simulator (Claude app)')
+  expect(serverLabel('ccd_foo')).toBe('foo (Claude app)')
+  expect(serverLabel('my_server')).toBe('my server')
 })

@@ -46,6 +46,7 @@ declare module 'claude-code' {
       limitSource: 'live' | 'reply' | null
       warnedLevel: Level
       notes: Notes | null
+      openSections: Record<string, boolean>
       isDismissed: boolean
       mcpCalls: Record<string, number>
       turns: number

@@ -45,6 +45,21 @@ export const labelOfServer = (server: string, tools: readonly string[]): string 
   return hits[0]!.n > 0 ? `${hits[0]!.name} (claude.ai connector)` : `claude.ai connector ${server.slice(0, 8)}`
 }
 
+const APP_SERVERS: Record<string, string> = {
+  ccd_turn: 'Task list',
+  ccd_session: 'Sessions',
+  ccd_view: 'Panes',
+  Claude_Browser: 'Browser',
+  Claude_Code_iOS_Simulator: 'iOS Simulator',
+  visualize: 'Visuals',
+}
+
+/** A readable name for a server: the desktop app's built-in ones by what they do, others with spaces for underscores. */
+export const serverLabel = (name: string) => {
+  const app = APP_SERVERS[name] ?? (name.startsWith('ccd_') ? name.slice(4) : name.startsWith('Claude_') ? name.slice(7).replace(/_/g, ' ') : null)
+  return app !== null ? `${app} (Claude app)` : name.replace(/_/g, ' ')
+}
+
 const top = (groups: Map<string, number>, n: number): Group[] =>
   [...groups].map(([name, tokens]) => ({ name, tokens })).sort((a, b) => b.tokens - a.tokens).slice(0, n)
 
