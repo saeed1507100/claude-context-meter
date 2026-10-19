@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- Toast the first time each kind of tip appears, so passing 250k always notifies.
+- Mark tips with ⚠️ instead of ▲.
+
 ## 0.6.0
 
 - Restructure the pane: tips first, then sections you can expand and collapse (notes, context, limits, tool servers).

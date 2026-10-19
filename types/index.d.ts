@@ -32,7 +32,9 @@ export type Biggest = { kind: 'mcp' | 'connector' | 'memory' | 'messages' | 'ski
 /** What Claude keeps for a project across compactions and sessions. */
 export type Notes = { goal: string | null; plan: { text: string; done: boolean }[]; decisions: string[]; updatedAt: number }
 
-export type Tip = { tone: Exclude<Level, 'ok'>; text: string }
+export type TipId = 'pace' | 'turn' | 'context' | 'biggest' | 'mcp' | 'weekly'
+
+export type Tip = { id: TipId; tone: Exclude<Level, 'ok'>; text: string }
 
 declare module 'claude-code' {
   interface PluginState {
@@ -44,7 +46,7 @@ declare module 'claude-code' {
       lastTurn: number | null
       weeklyToday: number | null
       limitSource: 'live' | 'reply' | null
-      warnedLevel: Level
+      warnedTips: string[]
       notes: Notes | null
       openSections: Record<string, boolean>
       isDismissed: boolean

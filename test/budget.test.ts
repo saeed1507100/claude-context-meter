@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { serverOfTool } from '../hooks/model'
-import { DEFAULT_BUDGET, baselineFor, biggestOf, budgetOf, dayKey, hoursLeftAtPace, isPaceHigh, parseLimits, tipsOf, verdictText } from '../hooks/budget'
+import { DEFAULT_BUDGET, baselineFor, freshTips, biggestOf, budgetOf, dayKey, hoursLeftAtPace, isPaceHigh, parseLimits, tipsOf, verdictText } from '../hooks/budget'
 
 const H = 3_600_000
 const fill = (tokens: number) => ({ tokens, window: 1_000_000, percent: Math.round(tokens / 10_000) })
@@ -122,4 +122,11 @@ test('a claude.ai connector is named as one, not as an MCP server', async () => 
   expect(b.kind).toBe('connector')
   const [tip] = tipsOf({ fill: fill(60_000), breakdown, limits: null, lastTurn: null, weeklyToday: null, biggest: b, budget: DEFAULT_BUDGET, now: 0 })
   expect(tip!.text).toBe("Notion (claude.ai connector) 30.0k (50%) is the biggest part of context, and this session hasn't used it. Disable it if this task won't")
+})
+
+test('each kind of tip toasts once, and again after it goes away', async () => {
+  const mcp = { id: 'mcp' as const, tone: 'elevated' as const, text: 'm' }
+  const ctx = { id: 'context' as const, tone: 'elevated' as const, text: 'c' }
+  expect(freshTips([mcp, ctx], ['mcp']).map(t => t.id)).toEqual(['context'])
+  expect(freshTips([mcp], [])).toEqual([mcp])
 })

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { Level, Limits, Notes } from '../types'
-import { LARGE_CONTEXT, baselineFor, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
+import { LARGE_CONTEXT, baselineFor, freshTips, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
 import type { Budget } from './budget'
 import { CHECKPOINT_PROMPT, EMPTY_NOTES, NOTES_DESCRIPTION, NOTES_SCHEMA, NOTES_TOOL, applyNotes, isEmpty, isNotesTool, nextStep, notesKey, notesPrompt } from './notes'
 import type { NotesInput } from './notes'
@@ -36,7 +36,7 @@ const limitSource = atom({ plugin: 'context-meter', key: 'limitSource' } as cons
 const turnStartFiveHour = atom({ plugin: 'context-meter', key: 'turnStartFiveHour' } as const, null)
 const lastTurn = atom({ plugin: 'context-meter', key: 'lastTurn' } as const, null)
 const weeklyToday = atom({ plugin: 'context-meter', key: 'weeklyToday' } as const, null)
-const warnedLevel = atom({ plugin: 'context-meter', key: 'warnedLevel' } as const, 'ok')
+const warnedTips = atom({ plugin: 'context-meter', key: 'warnedTips' } as const, [])
 const notes = atom({ plugin: 'context-meter', key: 'notes' } as const, null)
 const openSections = atom({ plugin: 'context-meter', key: 'openSections' } as const, {})
 
@@ -105,15 +105,15 @@ const snapshot = async ($: EngineInterface, budget: Budget) => {
   return { f, b, l, turn, today, tips, level, biggest, turnCount }
 }
 
-/** One toast each time the level rises; the nudge comes back with it. */
+/** One toast the first time each kind of tip appears; the band's tip comes back with it. */
 const warn = async ($: EngineInterface, budget: Budget) => {
-  const { level, tips } = await snapshot($, budget)
-  const warned = await read($, warnedLevel)
-  if (rankOf(level) > rankOf(warned) && tips.length > 0) {
-    $.ui.toast(tips[0]!.text)
+  const { tips } = await snapshot($, budget)
+  const fresh = freshTips(tips, await read($, warnedTips))
+  if (fresh.length > 0) {
+    $.ui.toast(`⚠️ ${fresh[0]!.text}`)
     await update($, isDismissed, () => false)
   }
-  await update($, warnedLevel, () => level)
+  await update($, warnedTips, () => tips.map(t => t.id))
 }
 
 const measure = async ($: EngineInterface, budget: Budget) => {
@@ -250,7 +250,7 @@ export const register: Register = (on, options) => {
         </Box>
         {tip !== null && (
           <Box flexDirection="row" gap={1} alignItems="center">
-            <Text color={tip.tone === 'high' ? 'error' : 'warning'}>▲</Text>
+            <Text>⚠️</Text>
             <Text dimColor>{tip.text}</Text>
             <Box flexGrow={1} />
             {f.tokens >= LARGE_CONTEXT && <Button key="checkpoint" label="Checkpoint" variant="primary" onPress={() => checkpoint($)} />}
@@ -308,7 +308,7 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column">
             {tips.map(t => (
               <Text>
-                <Text color={t.tone === 'high' ? 'error' : 'warning'}>▲ </Text>
+                <Text>⚠️ </Text>
                 {t.text}
               </Text>
             ))}
