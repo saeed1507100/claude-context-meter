@@ -154,6 +154,12 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  on('session.compact', async ($, e, next) => {
+    const result = await next(e)
+    if (e.agentId === undefined) await measure($, budget)
+    return result
+  })
+
   on('command.run', { command: 'context-meter' }, async $ => {
     await openPane($)
     return { text: 'Context pane opened.' }

@@ -10,10 +10,16 @@ export const BUSY_FIVE_HOUR = 50
 export const fmt = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`
 
-export const toFill = (c: SessionContextUsage): Fill | null =>
-  c.tokens === undefined
-    ? null
-    : { tokens: c.tokens, window: c.window, percent: c.percent ?? Math.round((c.tokens / c.window) * 100) }
+/**
+ * The fill from the last reply's count, or, before any reply (a new or just-compacted
+ * session), the sum of the breakdown's used categories.
+ */
+export const toFill = (c: SessionContextUsage): Fill | null => {
+  const used = c.breakdown?.categories.filter(k => k.kind === 'used').reduce((n, k) => n + k.tokens, 0)
+  const tokens = c.tokens ?? (used !== undefined && used > 0 ? used : undefined)
+  if (tokens === undefined) return null
+  return { tokens, window: c.window, percent: c.tokens !== undefined && c.percent !== undefined ? c.percent : Math.round((tokens / c.window) * 100) }
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

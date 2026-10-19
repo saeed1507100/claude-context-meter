@@ -105,3 +105,13 @@ test('desktop app servers get readable names', async () => {
   expect(serverLabel('ccd_foo')).toBe('foo (Claude app)')
   expect(serverLabel('my_server')).toBe('my server')
 })
+
+test('toFill estimates from the breakdown when there is no reply yet', async () => {
+  const categories = [
+    { name: 'Messages', tokens: 8_000, kind: 'used' },
+    { name: 'System prompt', tokens: 2_000, kind: 'used' },
+    { name: 'Free space', tokens: 990_000, kind: 'free' },
+  ]
+  expect(toFill({ window: 1_000_000, breakdown: { categories } } as never)).toEqual({ tokens: 10_000, window: 1_000_000, percent: 1 })
+  expect(toFill({ window: 1_000_000 } as never)).toBe(null)
+})

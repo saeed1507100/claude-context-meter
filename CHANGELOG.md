@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+
+- Update the meter right after `/compact`, estimating the size from the breakdown until the next reply.
+
 ## 0.6.1
 
 - Toast the first time each kind of tip appears, so passing 250k always notifies.

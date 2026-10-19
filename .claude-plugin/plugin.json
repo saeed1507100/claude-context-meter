@@ -1,6 +1,6 @@
 {
   "name": "context-meter",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Context-window meter and usage-limit assistant for Claude Code: a breakdown bar above the prompt, per-turn cost, timely compaction advice, and session notes (plan, progress, decisions) that survive /compact.",
   "author": {
     "name": "Saeed Anwar Khan"
