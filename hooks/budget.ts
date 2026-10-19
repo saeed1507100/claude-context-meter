@@ -142,7 +142,8 @@ export const verdictText = (b: Biggest, turns: number) =>
 
 /** The biggest component as `name 18.2k (31%)`. */
 export const biggestText = (b: Biggest) => `${label(b)} ${fmt(b.tokens)} (${Math.round(b.share * 100)}%)`
-const LARGE_CONTEXT = 100_000
+/** Where compacting starts to pay for itself; below it a summary loses more than it saves. */
+export const LARGE_CONTEXT = 250_000
 
 /**
  * What to do about the spend, most useful first. Compacting is one answer of
@@ -167,7 +168,7 @@ export const tipsOf = (args: {
     const left = hoursLeftAtPace(five, resets, now)!
     tips.push({
       tone: 'high',
-      text: `At this pace the 5h limit runs out at ${clock(now + left * 3_600_000)}, before ${budget.targetHours}h of work`,
+      text: `At this pace your 5-hour limit runs out around ${clock(now + left * 3_600_000)}. Lighter asks or Sonnet will stretch it`,
     })
   }
   if (lastTurn !== null && lastTurn >= budget.turnAlertPercent) {
@@ -175,26 +176,26 @@ export const tipsOf = (args: {
       tone: lastTurn >= budget.turnAlertPercent * 2 ? 'high' : 'elevated',
       text:
         fill.tokens >= LARGE_CONTEXT
-          ? `Last turn used ${lastTurn.toFixed(1)}% of 5h; most of it is re-reading ${fmt(fill.tokens)} of context`
-          : `Last turn used ${lastTurn.toFixed(1)}% of 5h on a small context: try Sonnet, lower effort, or a narrower ask`,
+          ? `That turn cost ${lastTurn.toFixed(1)}% of your 5-hour limit, mostly from re-reading ${fmt(fill.tokens)} of context`
+          : `That turn cost ${lastTurn.toFixed(1)}% of your 5-hour limit. Sonnet, lower effort or a narrower ask would cost less`,
     })
   }
   if (fill.tokens >= LARGE_CONTEXT) {
-    tips.push({ tone: 'elevated', text: `Each turn re-reads ${fmt(fill.tokens)}: save and compact, or /clear for a new task` })
+    tips.push({ tone: 'elevated', text: `Context is at ${fmt(fill.tokens)} and every turn re-reads it. Checkpoint, then run /compact, or /clear for a new task` })
   }
   const isBiggestUnused = biggest?.verdict === 'unused'
   if (isBiggestUnused) {
-    tips.push({ tone: 'elevated', text: `Biggest: ${biggestText(biggest)}, no calls this session: disable it if this task won't need it` })
+    tips.push({ tone: 'elevated', text: `${biggestText(biggest)} is the biggest part of context, and this session hasn't used it. Disable it if this task won't` })
   }
   const mcp = breakdown?.mcpServers.reduce((n, s) => n + s.tokens, 0) ?? 0
   if (mcp >= MCP_HEAVY && breakdown !== null && !isBiggestUnused) {
     const top = breakdown.mcpServers[0]!
-    tips.push({ tone: 'elevated', text: `MCP tools hold ${fmt(mcp)} (${top.label ?? top.name} ${fmt(top.tokens)}): disable servers you are not using` })
+    tips.push({ tone: 'elevated', text: `Tool schemas take ${fmt(mcp)}, ${top.label ?? top.name} the most at ${fmt(top.tokens)}. Disable the ones you don't need` })
   }
   if (weeklyToday !== null && weeklyToday >= budget.dailyWeeklyPercent * 0.8) {
     tips.push({
       tone: weeklyToday >= budget.dailyWeeklyPercent ? 'high' : 'elevated',
-      text: `Today used ${weeklyToday.toFixed(0)}% of the weekly limit (budget ${budget.dailyWeeklyPercent}%)`,
+      text: `You've used ${weeklyToday.toFixed(0)}% of your weekly limit today. A lighter pace keeps the rest of the week open`,
     })
   }
   return tips

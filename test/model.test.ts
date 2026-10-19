@@ -8,12 +8,13 @@ describe('levelOf', () => {
   test('small context is ok', async () => {
     expect(levelOf(fill(81_000), 12)).toBe('ok')
   })
-  test('100k+ is elevated, high once the 5-hour limit is busy', async () => {
-    expect(levelOf(fill(120_000), 20)).toBe('elevated')
-    expect(levelOf(fill(120_000), 55)).toBe('high')
+  test('110k is ok; 250k+ is elevated, high once the 5-hour limit is busy', async () => {
+    expect(levelOf(fill(110_000), 20)).toBe('ok')
+    expect(levelOf(fill(260_000), 20)).toBe('elevated')
+    expect(levelOf(fill(260_000), 55)).toBe('high')
   })
-  test('200k+ or 60% of the window is high', async () => {
-    expect(levelOf(fill(210_000), null)).toBe('high')
+  test('400k+ or 60% of the window is high', async () => {
+    expect(levelOf(fill(410_000), null)).toBe('high')
     expect(levelOf(fill(130_000, 200_000), null)).toBe('high')
   })
   test('no measurement is ok', async () => {

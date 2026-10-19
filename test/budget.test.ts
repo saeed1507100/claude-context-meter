@@ -47,18 +47,21 @@ describe('tipsOf', () => {
   const base = { breakdown: null, limits: null, weeklyToday: null, budget: DEFAULT_BUDGET, now: 0 }
   test('a heavy turn on a small context points at the model, not compacting', async () => {
     const tips = tipsOf({ ...base, fill: fill(30_000), lastTurn: 3 })
-    expect(tips.map(t => t.text)).toEqual(['Last turn used 3.0% of 5h on a small context: try Sonnet, lower effort, or a narrower ask'])
+    expect(tips.map(t => t.text)).toEqual(['That turn cost 3.0% of your 5-hour limit. Sonnet, lower effort or a narrower ask would cost less'])
+  })
+  test('110k does not suggest compacting', async () => {
+    expect(tipsOf({ ...base, fill: fill(110_000), lastTurn: null })).toEqual([])
   })
   test('a large context suggests compacting, MCP bloat suggests disabling servers', async () => {
     const tips = tipsOf({
       ...base,
-      fill: fill(150_000),
+      fill: fill(260_000),
       lastTurn: 1,
       breakdown: { slices: [], deferred: 0, memoryFiles: [], mcpServers: [{ name: 'notion', tokens: 25_000 }] },
     })
     expect(tips.map(t => t.text)).toEqual([
-      'Each turn re-reads 150.0k: save and compact, or /clear for a new task',
-      'MCP tools hold 25.0k (notion 25.0k): disable servers you are not using',
+      'Context is at 260.0k and every turn re-reads it. Checkpoint, then run /compact, or /clear for a new task',
+      "Tool schemas take 25.0k, notion the most at 25.0k. Disable the ones you don't need",
     ])
   })
   test('daily weekly budget warns near and past the line', async () => {
@@ -83,7 +86,7 @@ describe('biggestOf', () => {
     const b = biggestOf({ fill: fill(60_000), breakdown: bd([['playwright', 30_000]]), mcpCalls: {}, turns: 3 })
     expect(b).toEqual({ kind: 'mcp', name: 'playwright', tokens: 30_000, share: 0.5, calls: 0, verdict: 'unused' })
     const tips = tipsOf({ fill: fill(60_000), breakdown: bd([['playwright', 30_000]]), limits: null, lastTurn: null, weeklyToday: null, biggest: b, budget: DEFAULT_BUDGET, now: 0 })
-    expect(tips.map(t => t.text)).toEqual(["Biggest: playwright MCP 30.0k (50%), no calls this session: disable it if this task won't need it"])
+    expect(tips.map(t => t.text)).toEqual(["playwright MCP 30.0k (50%) is the biggest part of context, and this session hasn't used it. Disable it if this task won't"])
   })
 
   test('a server that was called is needed, and gets no tip', async () => {
@@ -118,5 +121,5 @@ test('a claude.ai connector is named as one, not as an MCP server', async () => 
   const b = biggestOf({ fill: fill(60_000), breakdown, mcpCalls: {}, turns: 3 })!
   expect(b.kind).toBe('connector')
   const [tip] = tipsOf({ fill: fill(60_000), breakdown, limits: null, lastTurn: null, weeklyToday: null, biggest: b, budget: DEFAULT_BUDGET, now: 0 })
-  expect(tip!.text).toBe("Biggest: Notion (claude.ai connector) 30.0k (50%), no calls this session: disable it if this task won't need it")
+  expect(tip!.text).toBe("Notion (claude.ai connector) 30.0k (50%) is the biggest part of context, and this session hasn't used it. Disable it if this task won't")
 })

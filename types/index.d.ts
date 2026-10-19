@@ -29,6 +29,9 @@ export type Verdict = 'needed' | 'unused' | 'too-early' | 'conversation' | 'fixe
 
 export type Biggest = { kind: 'mcp' | 'connector' | 'memory' | 'messages' | 'skills' | 'system'; name: string; tokens: number; share: number; calls: number; verdict: Verdict }
 
+/** What Claude keeps for a project across compactions and sessions. */
+export type Notes = { goal: string | null; plan: { text: string; done: boolean }[]; decisions: string[]; updatedAt: number }
+
 export type Tip = { tone: Exclude<Level, 'ok'>; text: string }
 
 declare module 'claude-code' {
@@ -42,7 +45,7 @@ declare module 'claude-code' {
       weeklyToday: number | null
       limitSource: 'live' | 'reply' | null
       warnedLevel: Level
-      isCompactPending: boolean
+      notes: Notes | null
       isDismissed: boolean
       mcpCalls: Record<string, number>
       turns: number

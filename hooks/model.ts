@@ -2,8 +2,8 @@ import type { SessionContextBreakdown, SessionContextUsage, SessionRateLimit } f
 
 import type { Breakdown, Fill, Group, Level, Limits, Slice } from '../types'
 
-export const ELEVATED_TOKENS = 100_000
-export const HIGH_TOKENS = 200_000
+export const ELEVATED_TOKENS = 250_000
+export const HIGH_TOKENS = 400_000
 export const HIGH_PERCENT = 60
 export const BUSY_FIVE_HOUR = 50
 
@@ -113,17 +113,6 @@ const RANK: Record<Level, number> = { ok: 0, elevated: 1, high: 2 }
 export const worst = (a: Level, b: Level): Level => (RANK[a] >= RANK[b] ? a : b)
 
 export const rankOf = (l: Level) => RANK[l]
-
-export const SAVE_PROMPT = [
-  'Context is getting large. Before we continue, checkpoint this session:',
-  '1. Write the key facts, current progress, the plan and next steps, and decisions made (with their reasons) to a durable place that fits this project:',
-  '   its existing progress/notes file if it has one, otherwise a HANDOFF.md at the project root; save anything that should outlive the project to memory.',
-  '2. Reply with a short list of what you saved and where.',
-  'Do not start new work in this turn.',
-].join('\n')
-
-export const COMPACT_INSTRUCTIONS =
-  'Keep: the task goal, key facts, progress, the plan and next steps, decisions and their reasons, and the paths of any notes saved this session.'
 
 export type Part = { name: string; tokens: number; slot: number; members: string[] }
 

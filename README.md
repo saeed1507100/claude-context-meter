@@ -17,7 +17,7 @@ This plugin shows what each turn costs and tells you why:
 
 | You see | It means | Suggested fix |
 | --- | --- | --- |
-| `Each turn re-reads 150k` | The context is large | Save & compact, or `/clear` before a new task |
+| `Context is at 260k and every turn re-reads it` | The context is large | Checkpoint, then `/compact`, or `/clear` before a new task |
 | `Last turn used 3.0% of 5h on a small context` | The model or the ask is heavy, not the context | Sonnet, lower effort, or a narrower ask |
 | `MCP tools hold 25k (notion 25k)` | Tool schemas are taking up the window | Disable servers you are not using |
 | `At this pace the 5h limit runs out at 14:20` | You will run out before your target hours | Slow down, or move bulk work to cheaper models |
@@ -30,7 +30,9 @@ This plugin shows what each turn costs and tells you why:
 - **Pace projection.** Projects when the 5-hour window runs out at the current pace and warns if that is sooner than your target (default 4 hours).
 - **Daily weekly budget.** Tracks how much of the 7-day limit you have used today, against a daily share (default 20%).
 - **Detail pane.** Click **Details** or run `/context-meter` to see the full breakdown, the largest MCP servers, deferred tools, the limit figures and every current tip.
-- **Save & compact.** One click asks Claude to write facts, progress, plan and decisions to the project's notes file (or a `HANDOFF.md`), then compacts once that turn ends.
+- **Session notes.** Claude keeps the goal, the plan with finished steps, and decisions in a `session_notes` tool. The notes live in the plugin's store under `~/.claude`, never in your repo, and come back after `/compact` and in new sessions of the same project. The pane shows them, with the next step marked.
+- **Checkpoint, then compact.** Past 250k tokens, the meter suggests a checkpoint. Click **Checkpoint** so Claude brings the notes up to date, then run `/compact` yourself.
+- **Status line.** The meter also posts `Context 120k · 12%` to the status line, so it stays visible when another mod holds the band above the prompt.
 - **Light and dark mode** in every surface. The palette is checked for color-blind safety.
 
 <picture>

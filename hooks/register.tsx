@@ -1,13 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Level, Limits } from '../types'
-import { baselineFor, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
+import type { Level, Limits, Notes } from '../types'
+import { LARGE_CONTEXT, baselineFor, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
 import type { Budget } from './budget'
+import { CHECKPOINT_PROMPT, EMPTY_NOTES, NOTES_DESCRIPTION, NOTES_SCHEMA, NOTES_TOOL, applyNotes, isEmpty, nextStep, notesKey, notesPrompt } from './notes'
+import type { NotesInput } from './notes'
 import {
-  COMPACT_INSTRUCTIONS,
-  ELEVATED_TOKENS,
-  SAVE_PROMPT,
   POLL_MS,
   USAGE_URL,
   fmt,
@@ -28,7 +27,6 @@ const PANE = 'context-meter'
 const BASELINE_KEY = 'weeklyBaseline'
 
 let poller: Timer | null = null
-let isCompacting = false
 
 const fill = atom({ plugin: 'context-meter', key: 'fill' } as const, null)
 const breakdown = atom({ plugin: 'context-meter', key: 'breakdown' } as const, null)
@@ -38,7 +36,7 @@ const turnStartFiveHour = atom({ plugin: 'context-meter', key: 'turnStartFiveHou
 const lastTurn = atom({ plugin: 'context-meter', key: 'lastTurn' } as const, null)
 const weeklyToday = atom({ plugin: 'context-meter', key: 'weeklyToday' } as const, null)
 const warnedLevel = atom({ plugin: 'context-meter', key: 'warnedLevel' } as const, 'ok')
-const isCompactPending = atom({ plugin: 'context-meter', key: 'isCompactPending' } as const, false)
+const notes = atom({ plugin: 'context-meter', key: 'notes' } as const, null)
 const isDismissed = atom({ plugin: 'context-meter', key: 'isDismissed' } as const, false)
 const mcpCalls = atom({ plugin: 'context-meter', key: 'mcpCalls' } as const, {})
 const turns = atom({ plugin: 'context-meter', key: 'turns' } as const, 0)
@@ -70,31 +68,19 @@ const pollLimits = async ($: EngineInterface) => {
 
 const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'Context & limits' })
 
-const saveState = ($: EngineInterface) => $.prompt.submit({ text: SAVE_PROMPT, asUser: true })
+const checkpoint = ($: EngineInterface) => $.prompt.submit({ text: CHECKPOINT_PROMPT, asUser: true })
 
-const saveAndCompact = async ($: EngineInterface) => {
-  await update($, isCompactPending, () => true)
-  await saveState($)
+/** Loads this project's notes from the plugin store into session state. */
+const loadNotes = async ($: EngineInterface) => {
+  const stored = (await $.store.get(notesKey(await $.session.root()))) as Notes | undefined
+  await update($, notes, () => stored ?? null)
 }
 
-const compact = ($: EngineInterface) => $.session.compact({ instructions: COMPACT_INSTRUCTIONS })
-
-/** Compaction is refused while a turn runs, and turn.complete still runs inside the turn, so retry until idle. */
-const compactWhenIdle = async ($: EngineInterface, tries = 10): Promise<void> => {
-  if (isCompacting && tries === 10) return
-  isCompacting = true
-  try {
-    const r = await compact($)
-    if ('skip' in r && r.skip !== undefined) $.ui.toast(`Compact skipped: ${r.skip}`)
-    isCompacting = false
-  } catch (err) {
-    if (tries > 1) {
-      $.clock.after(1000, () => void compactWhenIdle($, tries - 1))
-      return
-    }
-    isCompacting = false
-    $.ui.toast(`Couldn't compact: ${err instanceof Error ? err.message : String(err)}`)
-  }
+const saveNotes = async ($: EngineInterface, input: NotesInput) => {
+  const next = applyNotes((await read($, notes)) ?? EMPTY_NOTES, input, await $.clock.now())
+  await $.store.set(notesKey(await $.session.root()), next)
+  await update($, notes, () => next)
+  return next
 }
 
 /** Everything a drawing or a toast judges by, read in one place. */
@@ -137,6 +123,9 @@ const measure = async ($: EngineInterface, budget: Budget) => {
     await update($, breakdown, () => b)
   }
   await warn($, budget)
+  const f = await read($, fill)
+  // The status line stays visible when another mod holds the band above the prompt.
+  if (f !== null) $.ui.status(`Context ${fmt(f.tokens)} · ${f.percent}%`)
 }
 
 const pctText = (n: number | null) => (n === null ? '–' : `${Math.round(n)}%`)
@@ -146,6 +135,8 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'context-meter', description: 'Open the context and usage-limit pane' })
+    await $.tool.register({ name: NOTES_TOOL, description: NOTES_DESCRIPTION, inputSchema: NOTES_SCHEMA })
+    await loadNotes($)
     await measure($, budget)
     void pollLimits($)
     poller?.cancel()
@@ -163,7 +154,20 @@ export const register: Register = (on, options) => {
     return { text: 'Context pane opened.' }
   })
 
+  on('tool.describe', { tool: NOTES_TOOL }, async ($, e, next) => ({ ...(await next(e)), isDeferred: false }))
+
+  on('prompt.compose', async ($, e, next) => {
+    const result = await next(e)
+    const n = await read($, notes)
+    if (n === null || isEmpty(n)) return result
+    return { sections: [...result.sections, { id: 'context-meter:notes', text: notesPrompt(n), scope: 'session' as const }] }
+  })
+
   on('tool.call', async ($, e, next) => {
+    if ((e.tool as string) === NOTES_TOOL) {
+      const step = nextStep(await saveNotes($, e as unknown as NotesInput))
+      return { result: step === null ? 'Saved.' : `Saved. Next: ${step}` }
+    }
     const result = await next(e)
     // Counting is a side note; it must never fail the tool call.
     try {
@@ -192,21 +196,28 @@ export const register: Register = (on, options) => {
       await update($, lastTurn, () => after - before)
       await warn($, budget)
     }
-    if (await read($, isCompactPending)) {
-      await update($, isCompactPending, () => false)
-      $.clock.after(500, () => void compactWhenIdle($))
-    }
     return result
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
     const { f, b, l, turn, tips, level } = await snapshot($, budget)
-    if (e.props.hasSurvey || f === null) return next(e)
+    // Another mod's band (a progress bar) stacks under the meter instead of replacing it.
+    const below = await next(e)
 
     const tip = (await read($, isDismissed)) || level === 'ok' ? null : (tips[0] ?? null)
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
     const Svg = 'Svg' in ui ? ui.Svg : undefined
+    if (f === null)
+      return (
+        <Box flexDirection="column">
+          <Box flexDirection="row" gap={1}>
+            <Text dimColor>Context · measuring after the first reply</Text>
+          </Box>
+          {below}
+        </Box>
+      )
     const figure = `${fmt(f.tokens)} / ${fmt(f.window)}`
 
     const meter =
@@ -237,12 +248,11 @@ export const register: Register = (on, options) => {
             <Text color={tip.tone === 'high' ? 'error' : 'warning'}>▲</Text>
             <Text dimColor>{tip.text}</Text>
             <Box flexGrow={1} />
-            {f.tokens >= ELEVATED_TOKENS && (
-              <Button key="save-compact" label="Save & compact" variant="primary" onPress={() => saveAndCompact($)} />
-            )}
+            {f.tokens >= LARGE_CONTEXT && <Button key="checkpoint" label="Checkpoint" variant="primary" onPress={() => checkpoint($)} />}
             <Button key="dismiss" label="Later" plain onPress={() => update($, isDismissed, () => true)} />
           </Box>
         )}
+        {below}
       </Box>
     )
   })
@@ -252,6 +262,7 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = ui
     const Svg = 'Svg' in ui ? ui.Svg : undefined
     const { f, b, l, turn, today, tips, biggest, turnCount } = await snapshot($, budget)
+    const n = await read($, notes)
     if (f === null || b === null) return <Text dimColor>Waiting for the first reply.</Text>
     const source = await read($, limitSource)
     const parts = partsOf(b.slices)
@@ -301,10 +312,10 @@ export const register: Register = (on, options) => {
         )}
         <Box flexDirection="column">
           <Text dimColor>Usage limits{source === 'reply' ? ' (as of last reply)' : ''}</Text>
-          {row('5-hour window', pctText(l?.fiveHour ?? null), `aim: last ${budget.targetHours}h`)}
-          {row('Last turn', turn === null ? '–' : `+${turn.toFixed(1)}%`, `alert at ${budget.turnAlertPercent}%; counts parallel sessions too`)}
+          {row('5-hour window', pctText(l?.fiveHour ?? null))}
+          {row('Last turn', turn === null ? '–' : `+${turn.toFixed(1)}%`, 'includes other sessions running now')}
           {row('Weekly', pctText(l?.weekly ?? null))}
-          {row('Weekly, today', pctText(today), `budget ${budget.dailyWeeklyPercent}% a day`)}
+          {row('Weekly, today', pctText(today))}
         </Box>
         {b.mcpServers.length > 0 && (
           <Box flexDirection="column">
@@ -318,6 +329,26 @@ export const register: Register = (on, options) => {
             ))}
           </Box>
         )}
+        <Box flexDirection="column">
+          <Text dimColor>Session notes · kept outside the repo, restored after /compact</Text>
+          {n === null || isEmpty(n) ? (
+            <Text dimColor>{'  '}None yet. Claude records the plan and decisions as it works.</Text>
+          ) : (
+            <Box flexDirection="column">
+              {n.goal !== null && <Text>{'  '}{n.goal}</Text>}
+              {n.plan.map(s => (
+                <Text dimColor={s.done}>
+                  {'  '}
+                  {s.done ? '✓ ' : s.text === nextStep(n) ? '▸ ' : '○ '}
+                  {s.text}
+                </Text>
+              ))}
+              {n.decisions.slice(-3).map(d => (
+                <Text dimColor>{'  '}• {d}</Text>
+              ))}
+            </Box>
+          )}
+        </Box>
         {tips.length > 0 && (
           <Box flexDirection="column">
             {tips.map(t => (
@@ -329,11 +360,11 @@ export const register: Register = (on, options) => {
           </Box>
         )}
         <Box flexDirection="row" gap={1}>
-          <Button key="save-compact" label="Save & compact" variant="primary" hotkey="s" onPress={() => saveAndCompact($)} />
-          <Button key="save" label="Save" hotkey="v" onPress={() => saveState($)} />
-          <Button key="compact" label="Compact" hotkey="c" onPress={() => compactWhenIdle($)} />
+          <Button key="checkpoint" label="Checkpoint" variant="primary" hotkey="s" onPress={() => checkpoint($)} />
+          {n !== null && !isEmpty(n) && <Button key="clear" label="Clear notes" hotkey="x" plain onPress={() => saveNotes($, { clear: true })} />}
           <Button key="refresh" label="Refresh" hotkey="r" plain onPress={() => Promise.all([measure($, budget), pollLimits($)])} />
         </Box>
+        <Text dimColor>After a checkpoint, run /compact. Your notes come back in the next context.</Text>
       </Box>
     )
   })

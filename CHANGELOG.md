@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0
+
+- Suggest compacting only past 250k tokens; 110k no longer raises a toast.
+- Replace the Save & compact and Compact buttons with **Checkpoint**; you run `/compact` yourself.
+- Add session notes: a `session_notes` tool for goal, plan and decisions, kept outside the repo and restored after `/compact`.
+- Show the meter before the first reply, stack it above other mods' bands, and mirror it in the status line.
+- Reword tips in Claude's voice, without stating budget targets.
+
 ## 1.2.0 — 2026-10-16
 
 - claude.ai connectors, listed by id, are named after their product (`Notion (claude.ai connector)`) and kept apart from MCP servers in the pane and tips.
