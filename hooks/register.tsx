@@ -145,7 +145,8 @@ export const register: Register = (on, options) => {
     await measure($, budget)
     void pollLimits($)
     poller?.cancel()
-    poller = $.clock.every(POLL_MS, () => void pollLimits($))
+    // Notes are shared by every session in the project, so another session's change shows within a minute.
+    poller = $.clock.every(POLL_MS, () => void Promise.all([pollLimits($), loadNotes($)]))
     return next(e)
   })
 
@@ -190,7 +191,7 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     // Only a live reading at both ends gives a turn's cost; a cached one would be stale.
-    const l = await pollLimits($)
+    const [l] = await Promise.all([pollLimits($), loadNotes($)])
     await update($, turnStartFiveHour, () => l?.fiveHour ?? null)
     return next(e)
   })

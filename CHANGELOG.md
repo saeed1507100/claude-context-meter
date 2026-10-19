@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3
+
+- Reload session notes at each turn and every minute, so changes from another session in the project show up.
+
 ## 0.6.2
 
 - Update the meter right after `/compact`, estimating the size from the breakdown until the next reply.
