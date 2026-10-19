@@ -48,7 +48,7 @@ Checkpoint of the session that built this plugin (2026-10-16).
 - `atom()` refs need literal `plugin` and `key` values; a const variable fails `claude plugin validate`.
 - Narrow the `Svg` element with `'Svg' in ui`; the terminal's element table has none.
 
-## 1.0.0 (2026-10-16)
+## 0.2.0 (2026-10-16)
 
 - `hooks/budget.ts`: limits parsing (5h + 7d with resets), pace, weekly day baseline (in `$.store` key `weeklyBaseline`), `tipsOf`, `userConfig` budget.
 - Turn cost = live 5h reading at `turn.complete` minus live reading at `turn.start`; both must be live.
@@ -62,17 +62,17 @@ Checkpoint of the session that built this plugin (2026-10-16).
 - Optionally show the 7-day window and the reset time from the usage endpoint.
 - Optionally rename the plugin to `claude-context-meter` to match the repo. That means changing the manifest, the marketplace file, the atom `plugin` keys and the command.
 
-## 1.1.0 and 1.2.0 (2026-10-16, from a data-platform session)
+## 0.3.0 and 0.4.0 (2026-10-16, from a data-platform session)
 
 - **Biggest component** (`biggestOf`, `verdictText`, `biggestText` in `hooks/budget.ts`): the largest single item in the used context (MCP server, claude.ai connector, memory file, Skills, Messages, System prompt/tools), shown when it is at least 10k tokens and 15% of used context.
   - Verdicts: an MCP server or connector is `needed` once called, `too-early` before 3 turns (`UNUSED_AFTER_TURNS`), else `unused`; Messages `conversation`; System `fixed`; memory files and skills `unknown` (tool calls can't show use).
   - The pane always shows a "Biggest component" row; the band tip shows only for `unused`, and then replaces the generic "MCP tools hold Nk" tip.
   - A `tool.call` hook counts calls per server into state `mcpCalls`; `turn.complete` (main agent only) bumps `turns`. Server comes from `breakdown.mcpToolServer` (wire name → server), else the `mcp__<server>__` prefix (`serverOfTool`). Counting is in try/catch so it can never fail a tool call.
-- **Fix (1.1.0):** per-server MCP totals count only `isLoaded` schemas. Deferred ones are outside the window and had inflated one server to 121.7k while the MCP group was 29.9k.
-- **Connector names (1.2.0):** the breakdown lists claude.ai connectors by UUID only, and the plugin API has no display-name lookup (checked the d.ts). `labelOfServer` in `hooks/model.ts` infers the product from tool names (`PRODUCTS` regex list) → `Notion (claude.ai connector)`, fallback `claude.ai connector <8-char id>`. Stored as `Group.label`; calls stay keyed by id. Kind `connector` keeps them apart from MCP in the tip and pane heading ("MCP servers & claude.ai connectors"), because the user asked that connectors never read as MCP.
+- **Fix (0.3.0):** per-server MCP totals count only `isLoaded` schemas. Deferred ones are outside the window and had inflated one server to 121.7k while the MCP group was 29.9k.
+- **Connector names (0.4.0):** the breakdown lists claude.ai connectors by UUID only, and the plugin API has no display-name lookup (checked the d.ts). `labelOfServer` in `hooks/model.ts` infers the product from tool names (`PRODUCTS` regex list) → `Notion (claude.ai connector)`, fallback `claude.ai connector <8-char id>`. Stored as `Group.label`; calls stay keyed by id. Kind `connector` keeps them apart from MCP in the tip and pane heading ("MCP servers & claude.ai connectors"), because the user asked that connectors never read as MCP.
 - Pushed to main: f4ba9d5, 2ddf0fb, 18465ba. 26 tests pass. Type-check with `npx -y -p typescript@5.6.3 tsc -p . --noEmit` (plain `npx tsc` pulls a bogus package).
 - Commit gotcha: in the data-platform cwd a commit-message hook scans the whole Bash command, so write files and commit in separate commands.
-- The installed copy is 1.2.0 via `claude plugin update context-meter@context-meter`; `claude plugin marketplace update` alone does not update the install.
+- The installed copy is 0.4.0 via `claude plugin update context-meter@context-meter`; `claude plugin marketplace update` alone does not update the install.
 
 ### Next steps
 

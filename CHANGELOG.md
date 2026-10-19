@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.3.0
+## 0.5.0
 
 - Suggest compacting only past 250k tokens; 110k no longer raises a toast.
 - Replace the Save & compact and Compact buttons with **Checkpoint**; you run `/compact` yourself.
@@ -8,16 +8,16 @@
 - Show the meter before the first reply, stack it above other mods' bands, and mirror it in the status line.
 - Reword tips in Claude's voice, without stating budget targets.
 
-## 1.2.0 — 2026-10-16
+## 0.4.0 — 2026-10-16
 
 - claude.ai connectors, listed by id, are named after their product (`Notion (claude.ai connector)`) and kept apart from MCP servers in the pane and tips.
 
-## 1.1.0 — 2026-10-16
+## 0.3.0 — 2026-10-16
 
 - Biggest component: the pane names the largest single item in the context (an MCP server, memory file, skills, messages or system) and judges whether the session needs it. An MCP server with no tool calls after 3 turns raises a tip to disable it.
 - Fix: the MCP server list counted deferred schemas that are not in the window.
 
-## 1.0.0 — 2026-10-16
+## 0.2.0 — 2026-10-16
 
 - Usage budget: per-turn cost of the 5-hour window, pace projection against a target of working hours, and today's share of the weekly limit.
 - Tips that name the cause: large context, a heavy turn on a small context, MCP tool bloat, pace, or the daily weekly budget. Compacting is suggested only when the context is large.
