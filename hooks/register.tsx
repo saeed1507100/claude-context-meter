@@ -133,6 +133,8 @@ const measure = async ($: EngineInterface, budget: Budget) => {
   if (f !== null) $.ui.status(`Context ${fmt(f.tokens)} · ${f.percent}%`)
 }
 
+const callsText = (n: number) => (n === 0 ? 'unused' : `${n} call${n === 1 ? '' : 's'}`)
+
 const pctText = (n: number | null) => (n === null ? '–' : `${Math.round(n)}%`)
 
 export const register: Register = (on, options) => {
@@ -157,7 +159,11 @@ export const register: Register = (on, options) => {
 
   on('session.compact', async ($, e, next) => {
     const result = await next(e)
-    if (e.agentId === undefined) await measure($, budget)
+    if (e.agentId === undefined) {
+      await measure($, budget)
+      // The breakdown can still be empty right after compaction; one later look fills the gap.
+      if ((await read($, fill)) === null) $.clock.after(2000, () => void measure($, budget))
+    }
     return result
   })
 
@@ -277,6 +283,7 @@ export const register: Register = (on, options) => {
     const { f, b, l, turn, today, tips, biggest, turnCount } = await snapshot($, budget)
     if (f === null || b === null) return <Text dimColor>Waiting for the first reply.</Text>
     const n = await read($, notes)
+    const calls = await read($, mcpCalls)
     const open = { ...DEFAULT_OPEN, ...(await read($, openSections)) }
     const source = await read($, limitSource)
     const parts = partsOf(b.slices)
@@ -358,7 +365,7 @@ export const register: Register = (on, options) => {
         ))}
         {b.mcpServers.length > 0 &&
           section('tools', 'Tool servers', `${fmt(b.mcpServers.reduce((t, g) => t + g.tokens, 0))} tokens · ${b.mcpServers.length} servers`, () => (
-            <Box flexDirection="column">{b.mcpServers.slice(0, 8).map(g => row(g.label ?? serverLabel(g.name), fmt(g.tokens)))}</Box>
+            <Box flexDirection="column">{b.mcpServers.slice(0, 8).map(g => row(g.label ?? serverLabel(g.name), `${callsText(calls[g.name] ?? 0)} · ${fmt(g.tokens)}`))}</Box>
           ))}
         <Box flexDirection="row" gap={1}>
           <Button key="checkpoint" label="Checkpoint" variant="primary" hotkey="s" onPress={() => checkpoint($)} />

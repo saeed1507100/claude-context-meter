@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.5
+
+- Show each tool server's calls this session, or "unused", in the Tool servers section.
+- Measure once more 2 s after `/compact` when the first look finds no figure.
+
 ## 0.6.4
 
 - Draw the terminal bar's free space, so a small context still shows a full-width bar.
