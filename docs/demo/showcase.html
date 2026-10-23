@@ -1,0 +1,100 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>context-meter showcase</title>
+<style>
+:root{--bg:#1f1e1d;--panel:#262624;--ink:#f5f4ef;--dim:#9a9890;--line:#3d3c38;--box:#2c2b29;--chip:#30302e;--amber:#e0a43a;--accent:#b9a6f5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+#shot{width:1200px;height:600px;display:flex;overflow:hidden}
+#chat{flex:1;display:flex;flex-direction:column;justify-content:flex-end;padding:18px}
+#pane{width:430px;background:var(--panel);border-left:1px solid var(--line);padding:16px 18px;overflow:hidden}
+.msg{background:var(--box);border-radius:10px;padding:9px 12px;margin-bottom:12px}
+.step{display:flex;align-items:center;gap:7px;color:#d9d7d0;padding:1px 4px;opacity:0;transition:none}
+.step i{width:10px;height:10px;border-radius:50%;background:#8a8883;display:inline-block}
+.step.run i{background:var(--accent)}
+.band{background:var(--box);border-radius:10px;padding:8px 12px;margin-top:14px}
+.row{display:flex;align-items:center;gap:8px;height:28px;white-space:nowrap}
+.dim{color:var(--dim)}.sp{flex:1}
+.btn{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:7px;padding:3px 10px;font:inherit;font-size:12.5px}
+.bar svg{display:block}
+#tiprow{display:none;color:var(--amber)}
+.input{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px;color:var(--dim)}
+.ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.ph b{font-weight:500}
+.big{font-size:28px;font-weight:600;letter-spacing:-.02em}
+.big small{font-size:13px;font-weight:400;color:var(--dim);margin-left:6px}
+h4{margin:14px 0 5px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.li{display:flex;align-items:center;gap:8px;padding:1.5px 0}
+.li i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.li span.k{flex:1}.li b{font-weight:400;color:var(--dim);min-width:70px;text-align:right}
+.tip{color:var(--amber);padding:2px 0}
+</style></head>
+<body>
+<div id="shot">
+  <div id="chat">
+    <div class="msg">Refactor the auth module and add tests</div>
+    <div id="steps"></div>
+    <div class="band">
+      <div class="row">
+        <span class="dim">Context</span><span class="bar" id="bar"></span>
+        <span id="tok"></span><span class="dim" id="pc"></span>
+        <span class="dim" id="five"></span><span class="dim" id="last"></span>
+        <span class="sp"></span><button class="btn">Details</button>
+      </div>
+      <div class="row" id="tiprow"><span>▲</span><span id="tipt"></span></div>
+    </div>
+    <div class="input">Type / for commands</div>
+  </div>
+  <div id="pane">
+    <div class="ph"><b>Context meter</b><span class="dim">↗ ✕</span></div>
+    <div class="big" id="pbig"></div>
+    <div id="pbar" style="margin-top:10px"></div>
+    <div id="groups" style="margin-top:10px"></div>
+    <h4>Usage limits</h4>
+    <div class="li"><span class="k">5-hour window</span><span id="p5"></span><b>resets 16:40</b></div>
+    <div class="li"><span class="k">Last turn</span><span id="plast"></span><b></b></div>
+    <div class="li"><span class="k">This week</span><span id="pweek"></span><b></b></div>
+    <div class="li"><span class="k">Used today</span><span id="ptoday"></span><b>share 20% a day</b></div>
+    <h4>MCP servers</h4>
+    <div class="li"><span class="k">Browser (Claude app)</span><b>10.9k</b></div>
+    <div class="li"><span class="k">github</span><b>6.2k</b></div>
+    <div class="li"><span class="k">notion</span><b>4.1k</b></div>
+    <h4>Tips</h4>
+    <div id="ptips" class="dim">Nothing to flag.</div>
+  </div>
+</div>
+<script src="bars.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const lerp=(t,pts)=>{if(t<=pts[0][0])return pts[0][1];
+  for(let i=1;i<pts.length;i++){const[a,av]=pts[i-1],[b,bv]=pts[i];
+    if(t<=b){const u=(t-a)/(b-a),e=u*u*(3-2*u);return av+(bv-av)*e}}
+  return pts[pts.length-1][1]};
+const STEPS=[['Read src/auth.ts',1.0],['Grep refreshToken',2.0],['Read src/session.ts',3.0],['Edit src/auth.ts',4.2],['Write test/auth.test.ts',5.4],['Run npm test',6.6]];
+$('steps').innerHTML=STEPS.map(([s])=>`<div class="step"><i></i>${s}</div>`).join('');
+const TOK=[[0,42],[1,42],[2,70],[3,95],[4.2,120],[5.4,150],[6.6,168],[12,168]];
+const FIVE=[[0,18],[7,27],[12,27]];
+const LAST=[[0,0],[1,0],[7,2.4],[12,2.4]];
+const barFor=k=>BARS[Math.min(200,Math.max(20,Math.round(k/5)*5))];
+const COLS=['#3987e5','#d95926','#199e70','#c98500','#d55181'];
+function setT(t){
+  const k=lerp(t,TOK),five=lerp(t,FIVE),last=lerp(t,LAST),done=t>=7.2;
+  document.querySelectorAll('.step').forEach((el,i)=>{const s=STEPS[i][1];
+    el.style.opacity=t>=s?1:0;el.classList.toggle('run',t>=s&&(i===STEPS.length-1?!done:t<STEPS[i+1][1]))});
+  const b=barFor(k);
+  $('bar').innerHTML=b.s;$('pbar').innerHTML=b.l;
+  $('tok').textContent=k.toFixed(1)+'k / 1.0M';$('pc').textContent=Math.round(k/10)+'%';
+  $('five').textContent='· 5h '+Math.round(five)+'%';
+  $('last').textContent=t>=1?'· last turn +'+last.toFixed(1)+'%':'';
+  $('pbig').innerHTML=k.toFixed(1)+'k<small>of 1.0M tokens · '+Math.round(k/10)+'%</small>';
+  const msgs=k-42+11;
+  const g=[['Messages',msgs],['System',16.5],['MCP',21.2],['Memory & skills',10.5],['Other',2.0]];
+  $('groups').innerHTML=g.map(([n,v],i)=>`<div class="li"><i style="background:${COLS[i]}"></i><span class="k">${n}</span><b>${v.toFixed(1)}k</b></div>`).join('');
+  $('p5').textContent=Math.round(five)+'%';$('plast').textContent='+'+last.toFixed(1)+'%';
+  $('pweek').textContent=Math.round(lerp(t,[[0,19],[7,21],[12,21]]))+'%';
+  $('ptoday').textContent=Math.round(lerp(t,[[0,2],[7,4],[12,4]]))+'%';
+  const tip='The last turn used 2.4% of your 5-hour limit';
+  $('tiprow').style.display=done?'flex':'none';$('tipt').textContent=tip;
+  $('ptips').className=done?'tip':'dim';$('ptips').textContent=done?tip:'Nothing to flag.';
+}
+window.setT=setT;setT(+new URLSearchParams(location.search).get('t')||0);
+</script></body></html>
