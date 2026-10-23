@@ -94,17 +94,19 @@ describe('tipsOf', () => {
   test('110k raises no context warning', async () => {
     expect(tipsOf({ ...base, fill: fill(110_000), lastTurn: null })).toEqual([])
   })
-  test('a large context and heavy tool schemas are reported', async () => {
-    const tips = tipsOf({
-      ...base,
-      fill: fill(260_000),
-      lastTurn: 1,
-      breakdown: { slices: [], deferred: 0, memoryFiles: [], mcpServers: [{ name: 'notion', tokens: 25_000 }] },
-    })
+  const servers = { slices: [], deferred: 0, memoryFiles: [], mcpServers: [{ name: 'Claude_Browser', tokens: 10_900 }, { name: 'notion', tokens: 9_000 }, { name: 'linear', tokens: 6_000 }] }
+  test('a large context and unused tool servers are reported, without the app built-ins', async () => {
+    const tips = tipsOf({ ...base, fill: fill(260_000), lastTurn: 1, breakdown: servers, turns: 3 })
     expect(tips.map(t => t.text)).toEqual([
       'Context is at 260.0k, and every turn re-reads all of it',
-      'Tool schemas take 25.0k of context, notion the most at 25.0k',
+      'Unused tool servers take 15.0k of context, notion the most at 9.0k',
     ])
+  })
+  test('tool servers raise no tip when only app built-ins are heavy, the session is young, or they are in use', async () => {
+    const only = { ...servers, mcpServers: [{ name: 'Claude_Browser', tokens: 30_000 }] }
+    expect(tipsOf({ ...base, fill: fill(50_000), lastTurn: null, breakdown: only, turns: 5 })).toEqual([])
+    expect(tipsOf({ ...base, fill: fill(50_000), lastTurn: null, breakdown: servers, turns: 2 })).toEqual([])
+    expect(tipsOf({ ...base, fill: fill(50_000), lastTurn: null, breakdown: servers, turns: 5, mcpCalls: { notion: 1 } })).toEqual([])
   })
   test('daily weekly budget warns near and past the line', async () => {
     expect(tipsOf({ ...base, fill: fill(1000), lastTurn: null, weeklyToday: 21 })[0]!.tone).toBe('high')

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- The tool-schema tip now counts only servers this session hasn't called after 3 turns, and leaves out the desktop app's built-in servers (Browser, Task list and the like), which you can't disconnect. Before, it warned about any tool schemas over 20k, including ones you need. The Details pane still lists every server's size.
+
 ## 0.7.1
 
 - Fix "Used today" overcounting: a new day started from the last reading of any earlier day, so usage from days the plugin didn't see (for example 52% of a 57% week) showed as today's. The day's count now carries over only from a reading taken less than 15 minutes before midnight. Otherwise it starts at the first reading and shows as `Used since 09:14`.

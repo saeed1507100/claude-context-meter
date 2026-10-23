@@ -60,6 +60,9 @@ const APP_SERVERS: Record<string, string> = {
   visualize: 'Visuals',
 }
 
+/** True for the desktop app's built-in servers, which the user can't disconnect. */
+export const isAppServer = (name: string) => name in APP_SERVERS || name.startsWith('ccd_') || name.startsWith('Claude_')
+
 /** A readable name for a server: the desktop app's built-in ones by what they do, others with spaces for underscores. */
 export const serverLabel = (name: string) => {
   const app = APP_SERVERS[name] ?? (name.startsWith('ccd_') ? name.slice(4) : name.startsWith('Claude_') ? name.slice(7).replace(/_/g, ' ') : null)

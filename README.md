@@ -19,7 +19,7 @@ This plugin shows what each turn costs and what is driving it. It informs; it do
 | --- | --- |
 | `Context is at 260k, and every turn re-reads all of it` | The context is past 250k tokens |
 | `The last turn used 3.0% of your 5-hour limit` | One turn went over your per-turn threshold |
-| `Tool schemas take 25k of context, Notion the most at 25k` | Tool descriptions are taking up the window |
+| `Unused tool servers take 15k of context, Notion the most at 9k` | Servers you can disconnect, uncalled after 3 turns, are taking up the window. The app's built-in servers (Browser, Task list) are left out. |
 | `At this pace, your 5-hour limit runs out around 14:20` | The current pace empties the window before your target hours |
 | `You've used 21% of your weekly limit today` | Today's use is near or past your daily share of the week |
 

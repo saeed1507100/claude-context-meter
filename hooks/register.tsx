@@ -86,11 +86,12 @@ const snapshot = async ($: EngineInterface, budget: Budget) => {
   const today = await read($, weeklyToday)
   const since = await read($, weeklySince)
   const turnCount = await read($, turns)
-  const biggest = f === null || b === null ? null : biggestOf({ fill: f, breakdown: b, mcpCalls: await read($, mcpCalls), turns: turnCount })
+  const calls = await read($, mcpCalls)
+  const biggest = f === null || b === null ? null : biggestOf({ fill: f, breakdown: b, mcpCalls: calls, turns: turnCount })
   const tips =
     f === null
       ? []
-      : tipsOf({ fill: f, breakdown: b, limits: l, lastTurn: turn, weeklyToday: today, weeklySince: since, biggest, budget, now: await $.clock.now() })
+      : tipsOf({ fill: f, breakdown: b, limits: l, lastTurn: turn, weeklyToday: today, weeklySince: since, biggest, mcpCalls: calls, turns: turnCount, budget, now: await $.clock.now() })
   const level = tips.reduce<Level>((acc, t) => worst(acc, t.tone), levelOf(f, l?.fiveHour ?? null))
   return { f, b, l, turn, today, since, tips, level, biggest, turnCount }
 }

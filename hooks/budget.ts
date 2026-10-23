@@ -1,6 +1,6 @@
 import type { Biggest, Breakdown, Fill, Limits, Tip, Verdict } from '../types'
 
-import { fmt, serverLabel } from './model'
+import { fmt, isAppServer, serverLabel } from './model'
 
 const HOUR = 3_600_000
 const WINDOW_MS = 5 * HOUR
@@ -136,7 +136,7 @@ const clock = (t: number) => {
 /** `today`, or `since 09:14` when the count started after the day began. */
 export const sinceText = (since: number | null) => (since === null ? 'today' : `since ${clock(since)}`)
 
-const MCP_HEAVY = 20_000
+const MCP_UNUSED_HEAVY = 10_000
 const BIGGEST_MIN_TOKENS = 10_000
 const BIGGEST_MIN_SHARE = 0.15
 /** Turns an MCP server may sit unused before it is judged not needed. */
@@ -206,10 +206,13 @@ export const tipsOf = (args: {
   /** When the weekly count started, or null for the start of the day. */
   weeklySince?: number | null
   biggest?: Biggest | null
+  /** Tool calls per MCP server this session, and turns so far, to judge which servers sit unused. */
+  mcpCalls?: Readonly<Record<string, number>>
+  turns?: number
   budget: Budget
   now: number
 }): Tip[] => {
-  const { fill, breakdown, limits, lastTurn, weeklyToday, weeklySince = null, biggest = null, budget, now } = args
+  const { fill, breakdown, limits, lastTurn, weeklyToday, weeklySince = null, biggest = null, mcpCalls = {}, turns = 0, budget, now } = args
   const tips: Tip[] = []
   const five = limits?.fiveHour ?? null
   const resets = limits?.fiveHourResetsAt ?? null
@@ -237,10 +240,12 @@ export const tipsOf = (args: {
   if (isBiggestUnused) {
     tips.push({ id: 'biggest', tone: 'elevated', text: `${biggestText(biggest)} is the biggest part of context, and this session hasn't used it` })
   }
-  const mcp = breakdown?.mcpServers.reduce((n, s) => n + s.tokens, 0) ?? 0
-  if (mcp >= MCP_HEAVY && breakdown !== null && !isBiggestUnused) {
-    const top = breakdown.mcpServers[0]!
-    tips.push({ id: 'mcp', tone: 'elevated', text: `Tool schemas take ${fmt(mcp)} of context, ${top.label ?? serverLabel(top.name)} the most at ${fmt(top.tokens)}` })
+  // Only servers the user can disconnect and this session hasn't called; the app's built-in ones are a fixed cost.
+  const unused = turns < UNUSED_AFTER_TURNS ? [] : (breakdown?.mcpServers ?? []).filter(s => !isAppServer(s.name) && (mcpCalls[s.name] ?? 0) === 0)
+  const unusedTokens = unused.reduce((n, s) => n + s.tokens, 0)
+  if (unusedTokens >= MCP_UNUSED_HEAVY && !isBiggestUnused) {
+    const top = unused[0]!
+    tips.push({ id: 'mcp', tone: 'elevated', text: `Unused tool servers take ${fmt(unusedTokens)} of context, ${top.label ?? serverLabel(top.name)} the most at ${fmt(top.tokens)}` })
   }
   if (weeklyToday !== null && weeklyToday >= budget.dailyWeeklyPercent * 0.8) {
     tips.push({ id: 'weekly',
