@@ -4,10 +4,7 @@
 
 A [Claude Code](https://code.claude.com) plugin for the desktop app, the terminal, VS Code and mobile.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.gif">
-  <img alt="The meter above the prompt: context bar, 5-hour usage, last turn's cost, and a warning" src="docs/demo-light.gif">
-</picture>
+<img alt="The meter above the prompt and the Details pane updating while Claude works through a task" src="docs/showcase.gif">
 
 ## Why
 
