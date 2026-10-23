@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1
+
+- Fix "Used today" overcounting: a new day started from the last reading of any earlier day, so usage from days the plugin didn't see (for example 52% of a 57% week) showed as today's. The day's count now carries over only from a reading taken less than 15 minutes before midnight. Otherwise it starts at the first reading and shows as `Used since 09:14`.
+- Match a weekly window by its reset time within an hour, so the endpoint's shifting reset timestamp no longer drops the day's starting point.
+- Delete the old single `weeklyBaseline` store key.
+- README: fix the install and update commands, and describe what the store keeps.
+
 ## 0.7.0
 
 - Remove session notes, the `session_notes` tool and the Checkpoint button; notes saved by earlier versions are deleted on start.

@@ -42,6 +42,7 @@ declare module 'claude-code' {
       turnStartFiveHour: number | null
       lastTurn: number | null
       weeklyToday: number | null
+      weeklySince: number | null
       limitSource: 'live' | 'reply' | null
       warnedTips: string[]
       openSections: Record<string, boolean>

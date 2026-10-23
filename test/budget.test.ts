@@ -36,12 +36,12 @@ test('the weekly baseline is kept per window, so another account never resets it
   const now = Date.parse('2026-10-19T10:00:00')
   const mine = Date.parse('2026-10-21T23:00:00')
   const other = Date.parse('2026-10-24T05:00:00')
-  const yesterday = { [String(Math.round(mine / H))]: { day: '2026-10-18', weekly: 30, last: 44, resetsAt: mine } }
-  const first = baselinesFor(yesterday, 50, mine, now)
-  expect(first.today).toBe(6)
-  const withOther = baselinesFor(first.baselines, 4, other, now)
+  const first = baselinesFor(undefined, 50, mine, now)
+  const withOther = baselinesFor(first.baselines, 4, other, now + 60_000)
   expect(withOther.today).toBe(0)
-  expect(baselinesFor(withOther.baselines, 57, mine, now).today).toBe(13)
+  const back = baselinesFor(withOther.baselines, 57, mine + 1234, now + 120_000)
+  expect(back.today).toBe(7)
+  expect(back.since).toBe(now)
 })
 
 test('a window seen first today starts from now, and a reset starts it again', async () => {
@@ -50,6 +50,35 @@ test('a window seen first today starts from now, and a reset starts it again', a
   expect(baselinesFor(undefined, 44, r, now).today).toBe(0)
   const before = baselinesFor(undefined, 44, r, now).baselines
   expect(baselinesFor(before, 2, r, now).today).toBe(0)
+})
+
+test('readings that run across midnight count the whole new day', async () => {
+  const r = Date.parse('2026-10-24T05:00:00')
+  const late = baselinesFor(undefined, 30, r, Date.parse('2026-10-20T23:55:00')).baselines
+  const morning = baselinesFor(late, 31, r, Date.parse('2026-10-21T00:05:00'))
+  const noon = baselinesFor(morning.baselines, 40, r, Date.parse('2026-10-21T12:00:00'))
+  expect(noon.today).toBe(10)
+  expect(noon.since).toBe(null)
+})
+
+test('regression: day 3 never counts the two days before it as today (52% vs 57%)', async () => {
+  // Week resets on day 1. The meter last read 5% on day 1; days 2 and 3 used 52 points
+  // in sessions it did not see. Day 3's first reading must not report 52% as "today".
+  const r = Date.parse('2026-10-26T05:00:00')
+  const day1 = baselinesFor(undefined, 5, r, Date.parse('2026-10-19T18:00:00')).baselines
+  const day3 = Date.parse('2026-10-21T15:00:00')
+  const first = baselinesFor(day1, 52, r, day3)
+  expect(first.today).toBe(0)
+  expect(first.since).toBe(day3)
+  const later = baselinesFor(first.baselines, 57, r, day3 + 2 * H)
+  expect(later.today).toBe(5)
+  expect(later.since).toBe(day3)
+})
+
+test('the weekly tip says since when when the count started after the day began', async () => {
+  const now = Date.parse('2026-10-21T15:00:00')
+  const tips = tipsOf({ fill: fill(10_000), breakdown: null, limits: null, lastTurn: null, weeklyToday: 25, weeklySince: Date.parse('2026-10-21T09:14:00'), budget: DEFAULT_BUDGET, now })
+  expect(tips[0]!.text).toBe("You've used 25% of your weekly limit since 09:14")
 })
 
 test('budgetOf drops values out of range', async () => {

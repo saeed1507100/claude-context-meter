@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { Level, Limits } from '../types'
-import { baselinesFor, freshTips, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
+import { baselinesFor, freshTips, sinceText, biggestOf, biggestText, budgetOf, parseLimits, tipsOf, verdictText } from './budget'
 import type { Budget } from './budget'
 import {
   POLL_MS,
@@ -34,6 +34,7 @@ const limitSource = atom({ plugin: 'context-meter', key: 'limitSource' } as cons
 const turnStartFiveHour = atom({ plugin: 'context-meter', key: 'turnStartFiveHour' } as const, null)
 const lastTurn = atom({ plugin: 'context-meter', key: 'lastTurn' } as const, null)
 const weeklyToday = atom({ plugin: 'context-meter', key: 'weeklyToday' } as const, null)
+const weeklySince = atom({ plugin: 'context-meter', key: 'weeklySince' } as const, null)
 const warnedTips = atom({ plugin: 'context-meter', key: 'warnedTips' } as const, [])
 const openSections = atom({ plugin: 'context-meter', key: 'openSections' } as const, {})
 
@@ -48,9 +49,10 @@ const setLimits = async ($: EngineInterface, l: Limits, source: 'live' | 'reply'
   await update($, limits, () => l)
   await update($, limitSource, () => source)
   if (l.weekly === null) return
-  const { baselines, today } = baselinesFor(await $.store.get(BASELINE_KEY), l.weekly, l.weeklyResetsAt, await $.clock.now())
+  const { baselines, today, since } = baselinesFor(await $.store.get(BASELINE_KEY), l.weekly, l.weeklyResetsAt, await $.clock.now())
   await $.store.set(BASELINE_KEY, baselines)
   await update($, weeklyToday, () => today)
+  await update($, weeklySince, () => since)
 }
 
 /** Reads the account-wide windows, so usage from other sessions shows while this one is idle. */
@@ -70,9 +72,9 @@ const pollLimits = async ($: EngineInterface) => {
 
 const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'Context & limits' })
 
-/** Removes notes saved by 0.5–0.6, which carried one project's plan into others. */
+/** Removes notes saved by 0.5–0.6, and the single weekly baseline of 0.6.5 and earlier. */
 const dropNotes = async ($: EngineInterface) => {
-  for (const key of await $.store.keys()) if (key.startsWith('notes:')) await $.store.delete(key)
+  for (const key of await $.store.keys()) if (key.startsWith('notes:') || key === 'weeklyBaseline') await $.store.delete(key)
 }
 
 /** Everything a drawing or a toast judges by, read in one place. */
@@ -82,14 +84,15 @@ const snapshot = async ($: EngineInterface, budget: Budget) => {
   const l = await read($, limits)
   const turn = await read($, lastTurn)
   const today = await read($, weeklyToday)
+  const since = await read($, weeklySince)
   const turnCount = await read($, turns)
   const biggest = f === null || b === null ? null : biggestOf({ fill: f, breakdown: b, mcpCalls: await read($, mcpCalls), turns: turnCount })
   const tips =
     f === null
       ? []
-      : tipsOf({ fill: f, breakdown: b, limits: l, lastTurn: turn, weeklyToday: today, biggest, budget, now: await $.clock.now() })
+      : tipsOf({ fill: f, breakdown: b, limits: l, lastTurn: turn, weeklyToday: today, weeklySince: since, biggest, budget, now: await $.clock.now() })
   const level = tips.reduce<Level>((acc, t) => worst(acc, t.tone), levelOf(f, l?.fiveHour ?? null))
-  return { f, b, l, turn, today, tips, level, biggest, turnCount }
+  return { f, b, l, turn, today, since, tips, level, biggest, turnCount }
 }
 
 /** One toast the first time each kind of tip appears; the band's tip comes back with it. */
@@ -251,7 +254,7 @@ export const register: Register = (on, options) => {
     const ui = $.ui.resolve(e)
     const { Box, Text, Button } = ui
     const Svg = 'Svg' in ui ? ui.Svg : undefined
-    const { f, b, l, turn, today, tips, biggest, turnCount } = await snapshot($, budget)
+    const { f, b, l, turn, today, since, tips, biggest, turnCount } = await snapshot($, budget)
     if (f === null || b === null) return <Text dimColor>Waiting for the first reply.</Text>
     const calls = await read($, mcpCalls)
     const open = { ...DEFAULT_OPEN, ...(await read($, openSections)) }
@@ -308,7 +311,7 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column">
             {row('5-hour window', pctText(l?.fiveHour ?? null))}
             {row('This week', pctText(l?.weekly ?? null))}
-            {row('Used today', pctText(today))}
+            {row(`Used ${sinceText(since)}`, pctText(today))}
             {turn !== null && row('Last turn', `+${turn.toFixed(1)}%`)}
             {source === 'reply' && <Text dimColor>As of the last reply.</Text>}
           </Box>

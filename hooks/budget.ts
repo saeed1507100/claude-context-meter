@@ -73,36 +73,68 @@ export const dayKey = (now: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Where one weekly window stood at the start of a day, and the latest reading of it. */
-export type WindowBaseline = { day: string; weekly: number; last: number; resetsAt: number }
+/**
+ * Where one weekly window stood when today's count started, and the latest reading of it.
+ * `since` is when the count started: null for the day's start, else the time of the first reading.
+ */
+export type WindowBaseline = { day: string; weekly: number; since: number | null; last: number; lastAt: number; resetsAt: number }
 
 const WEEK_MS = 7 * 24 * HOUR
+/** The longest gap between two readings across midnight for the earlier one to stand for the day's start. */
+export const CARRY_GAP_MS = 15 * 60_000
+
+const isBaseline = (b: unknown): b is WindowBaseline =>
+  typeof b === 'object' && b !== null && typeof (b as WindowBaseline).weekly === 'number' && typeof (b as WindowBaseline).lastAt === 'number'
 
 /**
- * Today's starting point for each weekly window, keyed by its reset hour, so two
- * accounts (each with its own reset) never share one. A new day starts from the
- * window's last reading; a window seen first today starts from now.
+ * Today's starting point for each weekly window, so the share used today is
+ * `weekly - start`. A window is matched by its reset time (within an hour, which
+ * absorbs the endpoint's jitter), so two accounts never share one.
+ *
+ * Only a reading taken shortly before midnight can stand for the day's start.
+ * Usage between an older reading and now (other devices, claude.ai, days the
+ * plugin did not run) is unknown, so the count starts at the first reading
+ * and `since` says when. A week that resets restarts the count the same way.
  */
 export const baselinesFor = (
   stored: unknown,
   weekly: number,
   resetsAt: number | null,
   now: number,
-): { baselines: Record<string, WindowBaseline>; today: number } => {
+): { baselines: Record<string, WindowBaseline>; today: number; since: number | null } => {
   const day = dayKey(now)
-  const key = resetsAt === null ? 'unknown' : String(Math.round(resetsAt / HOUR))
-  const all = typeof stored === 'object' && stored !== null ? (stored as Record<string, WindowBaseline>) : {}
-  const prev = all[key]
-  const start =
-    prev === undefined || prev.last > weekly ? weekly : prev.day === day ? Math.min(prev.weekly, weekly) : prev.last
-  const kept = Object.fromEntries(Object.entries(all).filter(([, b]) => b.resetsAt === 0 || b.resetsAt > now - WEEK_MS))
-  return { baselines: { ...kept, [key]: { day, weekly: start, last: weekly, resetsAt: resetsAt ?? 0 } }, today: weekly - start }
+  const r = resetsAt ?? 0
+  const all = Object.fromEntries(
+    Object.entries(typeof stored === 'object' && stored !== null ? stored : {}).filter(
+      (e): e is [string, WindowBaseline] => isBaseline(e[1]) && (e[1].resetsAt === 0 || e[1].resetsAt > now - WEEK_MS),
+    ),
+  )
+  const match = Object.entries(all).find(([, b]) => (r === 0 ? b.resetsAt === 0 : b.resetsAt !== 0 && Math.abs(b.resetsAt - r) <= HOUR))
+  const prev = match?.[1]
+  const fresh = { weekly, since: now as number | null }
+  const begin =
+    prev === undefined || prev.last > weekly
+      ? fresh
+      : prev.day === day
+        ? { weekly: Math.min(prev.weekly, weekly), since: prev.since }
+        : now - prev.lastAt <= CARRY_GAP_MS
+          ? { weekly: prev.last, since: null }
+          : fresh
+  const key = match?.[0] ?? (r === 0 ? 'unknown' : String(Math.round(r / HOUR)))
+  return {
+    baselines: { ...all, [key]: { day, weekly: begin.weekly, since: begin.since, last: weekly, lastAt: now, resetsAt: r } },
+    today: weekly - begin.weekly,
+    since: begin.since,
+  }
 }
 
 const clock = (t: number) => {
   const d = new Date(t)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+
+/** `today`, or `since 09:14` when the count started after the day began. */
+export const sinceText = (since: number | null) => (since === null ? 'today' : `since ${clock(since)}`)
 
 const MCP_HEAVY = 20_000
 const BIGGEST_MIN_TOKENS = 10_000
@@ -171,11 +203,13 @@ export const tipsOf = (args: {
   limits: Limits | null
   lastTurn: number | null
   weeklyToday: number | null
+  /** When the weekly count started, or null for the start of the day. */
+  weeklySince?: number | null
   biggest?: Biggest | null
   budget: Budget
   now: number
 }): Tip[] => {
-  const { fill, breakdown, limits, lastTurn, weeklyToday, biggest = null, budget, now } = args
+  const { fill, breakdown, limits, lastTurn, weeklyToday, weeklySince = null, biggest = null, budget, now } = args
   const tips: Tip[] = []
   const five = limits?.fiveHour ?? null
   const resets = limits?.fiveHourResetsAt ?? null
@@ -211,7 +245,7 @@ export const tipsOf = (args: {
   if (weeklyToday !== null && weeklyToday >= budget.dailyWeeklyPercent * 0.8) {
     tips.push({ id: 'weekly',
       tone: weeklyToday >= budget.dailyWeeklyPercent ? 'high' : 'elevated',
-      text: `You've used ${weeklyToday.toFixed(0)}% of your weekly limit today`,
+      text: `You've used ${weeklyToday.toFixed(0)}% of your weekly limit ${sinceText(weeklySince)}`,
     })
   }
   return tips
